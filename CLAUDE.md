@@ -57,8 +57,19 @@
 slow-museum/
 ├── CLAUDE.md
 ├── slow_planet.html       # 참고용 베이스 셸 (Slow Terrarium 테마, 완성본)
-└── index.html             # 메인 파일 (구 PocA_SlowMuseum.html)
+├── index.html             # 메인 파일 (구 PocA_SlowMuseum.html, 단일 HTML)
+├── .claude/launch.json    # 프리뷰 dev 서버 (python -m http.server 8766)
+└── asset/
+    ├── lion_pbr.glb       # 최적화 기준 참고 모델 (미사용)
+    ├── sculpture/*.glb    # 조각 7종 (gltf-transform 최적화 완료, 원본 삭제됨)
+    ├── portrait/          # 초상화 원본(.jpg) + 크롭본(.crop.png)
+    ├── abstract/          # 추상화 원본 + .crop.png + HK1.matted.png
+    └── landscape/         # 풍경화 원본 + .crop.png
 ```
+- 깃 원격: `https://github.com/jaewonize/Slow-Museum` (origin/main). asset 포함 커밋됨.
+- 프리뷰: `.claude/launch.json`의 `slow-museum`(포트 8766) → `http://localhost:8766/index.html`.
+  정적 서버라 자동 리로드 없음 → 변경 후 `?t=`+Date.now() 캐시버스트로 새로고침.
+- 검증 팁: 프리뷰 스크린샷 툴이 간헐 불안정 → 단일 `preview_eval`로 씬그래프/수치 확인이 안정적.
 
 ### 베이스 셸 재사용 원칙 (slow_planet.html 기준)
 - 좌측 폰 프레임(`#canvas-wrap` 384×768) · 제목(`#phone-title`) · 하단 점수카드(`#cards`)
@@ -194,23 +205,55 @@ slow-museum/
 ## 작업 이력
 
 ### 완료
-- [x] slow_planet.html 셸 기반 index.html 골격 (좌측만 갤러리로 교체)
-- [x] 갤러리 3D 실내 골격 (바닥/천장/중앙 벽 + 좌우 벽 + 카메라)
-- [x] 4개 존 플레이스홀더 배치 (조각 전시대 5개, 높이 4종 variation / 풍경·초상·추상 액자)
-- [x] 존별 스포트라이트 + 슬라이더→`입력`→점수→밝기 연동 스캐폴드
-- [x] 조명 밸런스 (정면벽>측면벽 코너 가독성, 왼쪽벽 전용 밝은 재질, 배경색)
-- [x] 카메라: 수평 고정(수직선 평행) + 렌즈 시프트(카드 위 정렬) + 화각/회전한계 튜닝
-- [x] 입력: 드래그 좌우회전(수직패닝 없음) · 휠/핀치 줌 · 클릭 · 빈곳/천장 클릭 복귀
-- [x] 단독 감상: 깨끗한 배경벽 격리 + 카드 위 정렬 + 카메라 궤도 턴테이블(작품 transform 불변)
-- [x] 조각도 개별 클릭 단독 감상
-- [x] 아이소메트릭 전경 오버뷰 (휠 줌아웃 한계→전환, 드래그 방위회전, 근접 벽 작품 자동 숨김)
-- [x] UI 키컬러: 웜그레이 `#7d7169` (slow_planet 그린에서 교체)
+- [x] index.html 골격 (slow_planet 셸 재사용, 좌측만 갤러리로 교체) + 파일명 index.html
+- [x] 갤러리 3D 실내 (바닥/천장/중앙·좌·우 벽), 카메라 수평 고정(수직선 평행)
+      + 렌즈 시프트(카드 위 정렬) + FOV 66 + 회전한계
+- [x] 입력: 1포인터 드래그 좌우회전(수직패닝 없음) · 휠/핀치 줌 · 클릭 ·
+      빈곳/천장 클릭 복귀. 모드: `free`/`transition`/`focus`/`overview`
+- [x] 단독 감상(focus): 깨끗한 배경벽 격리 + 카드 위 정렬 + **카메라 궤도 턴테이블
+      (작품 transform 불변 → 리셋 시 잔존 없음)** + 빈곳 클릭 시 숨은 작품 픽 제외
+- [x] 아이소메트릭 전경 오버뷰(휠 줌아웃 한계→전환, 드래그 방위회전, 근접 벽 작품 숨김)
+- [x] 조명: 환경/반구/약한 sun + 존 스포트(점수 연동) + 정면벽 밝게(코너 대비) +
+      왼쪽벽 전용 재질, 배경색. **조각별 개별 스포트라이트**(레이어 아님 — `distance`로
+      전시대 밑동까지만, 바닥 컷오프), thinker는 emissive로 밝힘
+- [x] 조각 GLB 7종 **gltf-transform 최적화**(meshopt+webp+quantize, ~280MB→8MB),
+      원본 삭제·치환. 5개 전시대에 정규화 배치(`SCULPT_ADJ`로 scale/ry/ox/bright 보정)
+- [x] 전시대: 높이 개별값, 밝은 색(#ffffff), **접지(contact) 그림자** plane
+- [x] 벽 작품 매핑(Pillow로 흰 여백 자동 크롭, *.crop.png):
+  - 가운데(초상화/groom): picasso·perarl_earing·matisse·andy_warhol, **면적 1.7 고정**
+  - 오른쪽(추상화/manage): 1·4=“Temporarily off view” 텍스트(작게 H1.3),
+    2·3=HK1(여백 합성 .matted)·HK2(원본 여백) — **세로길이 1.9·걸리는높이만 일치**, 가로는 비율대로
+  - 왼쪽(풍경화/rest): cypresses·water_lilies·“Temporarily off view”·inwang, **면적 2.3 고정**
+- [x] 피사계 심도(DOF): `EffectComposer`+`BokehPass`+`GammaCorrection`.
+      focus=양수 월드거리(앞줄 조각), 모드별 자동, `aperture 0.0016 / maxblur 0.012`
+- [x] UI 키컬러 웜그레이 `#7d7169`, 제목 `#675d56`(키컬러 계열·약간 어둡게)
+- [x] GitHub origin/main 푸시 (asset 포함)
 
 ### 미구현 / 다음
-- [ ] 실제 작품 이미지·조각 모델 적용 — 이미지 원본 비율대로 액자 자동 생성,
-      **면적 고정** 정규화(결정됨), 비동기 로드 후 액자생성+포커스등록, 해상도 긴변 ~600px+
-- [ ] 트리거 버튼 5개 반응 로직 (참고 셸엔 없음 — 신규 설계)
+- [ ] 트리거 버튼 반응 로직 (현재 버튼만 있고 리스너 없음 — 신규 설계)
+- [ ] 점수 슬라이더→존 밝기 외 다른 반응(보상 추가 등) 구체화
 - [ ] 좌측 영역 모듈화 (향후 다중 테마 병렬 비교)
-- [ ] 자비에르 베이앙 / 보테로 / 올라퍼 엘리아슨 구체 작품 확정
-- [ ] 평면 작품 재질 변환(스타일 재해석) 방식 확정
-- [ ] (보류) 노화속도 = 태양 좌→우 이동속도 연동 (`sun` 애니메이션 — 조각 모델 작업 후 예정)
+- [ ] 미정 작품 확정(자비에르 베이앙/보테로/올라퍼 엘리아슨), 나머지 보상 작품 채우기
+- [ ] (보류) 노화속도 = 태양 좌→우 이동속도 연동 (`sun` 애니메이션)
+
+## 코드 맵 (다른 기기에서 이어서 작업 시 — index.html 내 조절 지점)
+- **벽↔존 매핑**: rest=왼쪽/풍경, groom=가운데/초상, manage=오른쪽/추상, move=중앙홀/조각.
+  각 `zones.{key}.items[0..3]`이 프레임(생성 z순). 프레임=`makeFrame` 그룹
+  (`userData.art`=그림 plane, `userData.frame`=테두리 box).
+- **벽 작품 배치/크기**: `GROOM_ART`(배열·순서), `GROOM_AREA`(면적) ·
+  `MANAGE_ART_H`/`MANAGE_NOTICE_H`(세로길이) + `[['HK1.matted.png',1],['HK2.jpg',2]]` ·
+  `LANDSCAPE_AREA` + `[['cypresses',0],...]`. 사이즈 함수: `fitFrameByArea` / `fitFrameByHeight`.
+  안내문구는 `makeNoticeTexture(['Temporarily','off view'])` (canvas, `NOTICE_ASPECT`).
+- **조각**: `SCULPT_ADJ[name]={scale,ry,ox,bright}`(현재값 thrower/nike/brancusi_pbr/thinker),
+  `SCULPT_H`(균일 높이 기준), `PED_LAYOUT`(x,z,전시대높이,모델명). 조각별 스포트 = 로더 내
+  `spot`(intensity 2.8, `spot.distance`=전시대 밑동까지). 접지그림자=`_contactShadowTex`.
+- **카메라/뷰**: `camera`(fov 66), `VIEW_SHIFT_Y`(렌즈시프트), `YAW_LIMIT`,
+  `applyCam`, 트윈 `startTween`/`focusOn`/`returnToInit`, 오버뷰 `OVERVIEW`/`enterOverview`.
+- **DOF**: `bokeh.uniforms.aperture/maxblur`(블러 세기), `dofFocusDistance()`(모드별 초점).
+  `composer` 패스 체인: RenderPass→BokehPass(needsSwap=true)→GammaCorrection.
+- **dev 훅**: `window.__debug = { camera, scene, zones, focusables, focusOn,
+  returnToInit, composer, bokeh, state() }` — 검증/디버그용.
+- **에셋 가공**: 조각 최적화 = `npx @gltf-transform/cli optimize <in> <out>
+  --compress meshopt --texture-compress webp --texture-size 1024
+  --simplify-ratio 0.1 --simplify-error 0.01`. 이미지 여백 크롭 = Pillow
+  (코너색 기준 트림 → `*.crop.png`). HK1 여백합성 = 흰 캔버스 패딩.
