@@ -177,6 +177,7 @@ canvas:active { cursor:grabbing; }
 }
 .trigger-btn:hover { background: rgba(125, 113, 105, 0.12); }
 .trigger-btn:active { transform: scale(0.97); }
+.trigger-row { display: flex; gap: 10px; align-items: center; }
 </style>
 </head>
 <body>
@@ -216,8 +217,11 @@ canvas:active { cursor:grabbing; }
     <div id="trigger-buttons">
       <button class="trigger-btn">100번째 방문</button>
       <button class="trigger-btn">지난 한 달 간 미접속</button>
-      <button class="trigger-btn">할로윈 이벤트</button>
-      <button class="trigger-btn">동일연령 총점 평균보다 낮음</button>
+      <button class="trigger-btn">이벤트</button>
+      <div class="trigger-row">
+        <button class="trigger-btn">동일연령 총점 평균보다 낮음</button>
+        <button class="trigger-btn">높음</button>
+      </div>
       <button class="trigger-btn">잘 다스리기 20점 하락</button>
     </div>
   </div>
