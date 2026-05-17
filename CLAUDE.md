@@ -57,7 +57,7 @@
 slow-museum/
 ├── CLAUDE.md
 ├── slow_planet.html       # 참고용 베이스 셸 (Slow Terrarium 테마, 완성본)
-└── PocA_SlowMuseum.html   # 메인 파일 (미구현)
+└── index.html             # 메인 파일 (구 PocA_SlowMuseum.html)
 ```
 
 ### 베이스 셸 재사용 원칙 (slow_planet.html 기준)
@@ -194,7 +194,7 @@ slow-museum/
 ## 작업 이력
 
 ### 완료
-- [x] slow_planet.html 셸 기반 PocA_SlowMuseum.html 골격 (좌측만 갤러리로 교체)
+- [x] slow_planet.html 셸 기반 index.html 골격 (좌측만 갤러리로 교체)
 - [x] 갤러리 3D 실내 골격 (바닥/천장/중앙 벽 + 좌우 벽 + 카메라)
 - [x] 4개 존 플레이스홀더 배치 (조각 전시대 5개, 높이 4종 variation / 풍경·초상·추상 액자)
 - [x] 존별 스포트라이트 + 슬라이더→`입력`→점수→밝기 연동 스캐폴드
