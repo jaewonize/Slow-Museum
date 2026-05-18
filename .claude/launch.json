@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "slow-museum",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8766"],
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/ttt/Desktop/Slow Museum/.claude/serve.py"],
       "port": 8766
     }
   ]

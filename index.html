@@ -523,7 +523,7 @@ const texLoader = new THREE.TextureLoader();
 GROOM_ART.forEach((name, i) => {
   const f = zones.groom.items[i];
   if (!f) return;
-  texLoader.load('asset/portrait/' + name + '.crop.png', tex => {
+  texLoader.load('asset/portrait/' + name + '.crop.jpg', tex => {
     tex.encoding = THREE.sRGBEncoding;            // 컬러 텍스처 → sRGB (감마/톤매핑 정확)
     const iw = tex.image.naturalWidth || tex.image.width;
     const ih = tex.image.naturalHeight || tex.image.height;
@@ -570,7 +570,7 @@ function fitFrameByHeight(f, tex, aspect, frameH) {
   if (f) fitFrameByHeight(f, makeNoticeTexture(['Temporarily', 'off view']), NOTICE_ASPECT, MANAGE_NOTICE_H);
 });
 // HK2=원본(여백 포함, 크롭X), HK1=HK2와 비슷한 흰 여백 추가본
-[['HK1.matted.png', 1], ['HK2.jpg', 2]].forEach(([file, i]) => {
+[['HK1.matted.jpg', 1], ['HK2.jpg', 2]].forEach(([file, i]) => {
   const f = zones.manage.items[i];
   if (!f) return;
   texLoader.load('asset/abstract/' + file, tex => {
@@ -597,7 +597,7 @@ function fitFrameByArea(f, tex, aspect, area) {
 [['cypresses', 0], ['water_lilies', 1], ['inwang', 3]].forEach(([name, i]) => {
   const f = zones.rest.items[i];
   if (!f) return;
-  texLoader.load('asset/landscape/' + name + '.crop.png', tex => {
+  texLoader.load('asset/landscape/' + name + '.crop.jpg', tex => {
     tex.encoding = THREE.sRGBEncoding;
     const iw = tex.image.naturalWidth || tex.image.width;
     const ih = tex.image.naturalHeight || tex.image.height;
@@ -951,7 +951,18 @@ canvas.addEventListener('wheel', e => {
 function easeInOut(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
 // ─── 피사계 심도(DOF): 초기 앵글에서 앞줄 조각 선명 / 원경 살짝 블러 ───
 const _dpr = Math.min(window.devicePixelRatio, 2);
-const composer = new THREE.EffectComposer(renderer);   // 생성자가 drawingBuffer 해상도 사용
+// EffectComposer는 자체 렌더타깃을 써서 renderer의 antialias(MSAA)가 우회됨
+// → 조각 외곽선이 계단형으로 보임. WebGL2 멀티샘플 타깃을 넘겨 후처리 체인에도 MSAA 적용.
+let _composerTarget;
+if (renderer.capabilities.isWebGL2) {
+  _composerTarget = new THREE.WebGLMultisampleRenderTarget(
+    Math.floor(W * _dpr), Math.floor(H * _dpr),
+    { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat, stencilBuffer: false }
+  );
+  _composerTarget.samples = 4;
+}
+const composer = new THREE.EffectComposer(renderer, _composerTarget);   // 멀티샘플 타깃(없으면 기본 동작)
 composer.addPass(new THREE.RenderPass(scene, camera));
 const bokeh = new THREE.BokehPass(scene, camera, {
   focus: 8.0, aperture: 0.0016, maxblur: 0.012,  // focus는 매 프레임 거리값 / 점진적 블러
