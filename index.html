@@ -388,7 +388,7 @@ const PED_LAYOUT = [
   [ 0.0, -1.8, 0.3,   'thrower'],       // #2 앞열-중 (앞으로 당김)
   [ 2.0, -1.8, 0.3,   'nike'],          // #3 앞열-우 (앞으로 당김)
   [-1.2, -5.5, 0.6,   'thinker'],       // #4 뒷열-좌
-  [ 1.2, -5.5, 0.936, 'brancusi_pbr'],  // #5 뒷열-우
+  [ 1.2, -5.5, 0.936, 'brancusi'],  // #5 뒷열-우
 ];
 PED_LAYOUT.forEach(([x, z, h]) => {
   const p = makePedestal(h);
@@ -516,18 +516,18 @@ zones.groom.items.forEach(g  => registerObject(g, 'groom',  new THREE.Vector3(0,
 zones.manage.items.forEach(g => registerObject(g, 'manage', new THREE.Vector3(-1, 0, 0)));
 zones.move.items.forEach(g   => registerObject(g, 'move',   new THREE.Vector3(0, 0, 1)));
 
-// ─── 초상화: 가운데 벽 액자에 매핑 (크롭본, 비율별 면적 고정 크기) ───
+// ─── 초상화: 가운데 벽 액자에 매핑 (원본 이미지, 비율별 면적 고정 크기) ───
 const GROOM_AREA = 1.7;                          // 액자 면적 고정 → 비율 달라도 체감 크기 균일
-const GROOM_ART = ['picasso', 'perarl_earing', 'matisse', 'andy_warhol']; // 좌→우 (frame 0..3)
+const GROOM_ART = ['picasso', 'pearl_earing', 'matisse', 'andy_warhol']; // 좌→우 (frame 0..3)
 const texLoader = new THREE.TextureLoader();
 GROOM_ART.forEach((name, i) => {
   const f = zones.groom.items[i];
   if (!f) return;
-  texLoader.load('asset/portrait/' + name + '.crop.jpg', tex => {
+  texLoader.load('asset/portrait/' + name + '.jpg', tex => {
     tex.encoding = THREE.sRGBEncoding;            // 컬러 텍스처 → sRGB (감마/톤매핑 정확)
     const iw = tex.image.naturalWidth || tex.image.width;
     const ih = tex.image.naturalHeight || tex.image.height;
-    const r = iw / ih;                            // 크롭 후 가로/세로 비
+    const r = iw / ih;                            // 이미지 가로/세로 비(원본/크롭 그대로)
     const H = Math.sqrt(GROOM_AREA / r), W = r * H;
     const art = f.userData.art, box = f.userData.frame;
     art.geometry.dispose();
@@ -570,7 +570,7 @@ function fitFrameByHeight(f, tex, aspect, frameH) {
   if (f) fitFrameByHeight(f, makeNoticeTexture(['Temporarily', 'off view']), NOTICE_ASPECT, MANAGE_NOTICE_H);
 });
 // HK2=원본(여백 포함, 크롭X), HK1=HK2와 비슷한 흰 여백 추가본
-[['HK1.matted.jpg', 1], ['HK2.jpg', 2]].forEach(([file, i]) => {
+[['HK1.jpg', 1], ['HK2.jpg', 2]].forEach(([file, i]) => {
   const f = zones.manage.items[i];
   if (!f) return;
   texLoader.load('asset/abstract/' + file, tex => {
@@ -597,7 +597,7 @@ function fitFrameByArea(f, tex, aspect, area) {
 [['cypresses', 0], ['water_lilies', 1], ['inwang', 3]].forEach(([name, i]) => {
   const f = zones.rest.items[i];
   if (!f) return;
-  texLoader.load('asset/landscape/' + name + '.crop.jpg', tex => {
+  texLoader.load('asset/landscape/' + name + '.jpg', tex => {
     tex.encoding = THREE.sRGBEncoding;
     const iw = tex.image.naturalWidth || tex.image.width;
     const ih = tex.image.naturalHeight || tex.image.height;
@@ -611,7 +611,7 @@ const SCULPT_H = 1.7;                          // 조각 목표 높이(월드 �
 const SCULPT_ADJ = {
   thrower:      { scale: 0.9, ry: Math.PI / 4 },
   nike:         { scale: 0.9, ry: 0 },
-  brancusi_pbr: { scale: 0.66, ry: 0 },
+  brancusi: { scale: 0.66, ry: 0 },
   thinker:      { scale: 0.88, ry: Math.PI / 6, bright: 0.9, ox: 0.0 },  // 반시계30° · 밝힘 · X중심정렬(우로 0.12 밀어넣음)
 };
 const gltfLoader = new THREE.GLTFLoader();

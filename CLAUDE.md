@@ -56,22 +56,26 @@
 ```
 slow-museum/
 ├── CLAUDE.md
-├── slow_planet.html       # 참고용 베이스 셸 (Slow Terrarium 테마, 완성본)
-├── index.html             # 메인 파일 (구 PocA_SlowMuseum.html, 단일 HTML)
-├── .claude/launch.json    # 프리뷰 dev 서버 (python -m http.server 8766)
+├── index.html             # 메인 파일 (단일 HTML). slow_planet.html은 삭제됨
+├── .claude/launch.json    # dev 서버 (python3 + .claude/serve.py, 포트 8766)
+├── .claude/serve.py       # 멀티스레드 정적 서버 (preview_start가 Desktop TCC로 막힘)
 └── asset/
-    ├── lion_pbr.glb       # 최적화 기준 참고 모델 (미사용)
-    ├── sculpture/*.glb    # 조각 7종 (gltf-transform 최적화 완료, 원본 삭제됨)
-    ├── portrait/          # 초상화 원본(.jpg) + 크롭본(.crop.png)
-    ├── abstract/          # 추상화 원본 + .crop.png + HK1.matted.png
-    └── landscape/         # 풍경화 원본 + .crop.png
+    ├── lion.glb           # 최적화 기준 참고 모델 (미사용, 향후 사용 예정 → 보존)
+    ├── sculpture/*.glb    # 조각 다수 (gltf-transform 최적화 완료, 원본 삭제됨).
+    │                      #   현재 5종만 PED_LAYOUT 사용, 나머지는 향후 사용 → 보존
+    ├── portrait/          # 초상화: 사용 4종 = <이름>.jpg(최적화). 그 외 신규 원본 .jpg 보존
+    ├── abstract/          # 추상화: HK1.jpg · HK2.jpg (최적화, 원본명)
+    └── landscape/         # 풍경화: <이름>.jpg (cypresses·water_lilies·inwang, 최적화)
 ```
+- **에셋 명명 원칙**: 최적화 끝난 파일은 **원본 파일명으로 치환**해 폴더 용량 절감
+  (`.crop`·`.matted` 등 부수 구분자 미사용). 아직 최적화 안 한 소스 파일은 **삭제 금지**.
 - 깃 원격: `https://github.com/jaewonize/Slow-Museum` (origin/main). asset 포함 커밋됨.
-- 프리뷰: `.claude/launch.json`의 `slow-museum`(포트 8766) → `http://localhost:8766/index.html`.
-  정적 서버라 자동 리로드 없음 → 변경 후 `?t=`+Date.now() 캐시버스트로 새로고침.
+- 프리뷰: `preview_start`는 macOS Desktop TCC로 차단됨 → Bash 백그라운드로
+  `python3 .claude/serve.py` 실행 → `http://localhost:8766/index.html`.
+  정적 서버라 자동 리로드 없음 → 강력 새로고침(Cmd+Shift+R) 또는 `?t=`+Date.now().
 - 검증 팁: 프리뷰 스크린샷 툴이 간헐 불안정 → 단일 `preview_eval`로 씬그래프/수치 확인이 안정적.
 
-### 베이스 셸 재사용 원칙 (slow_planet.html 기준)
+### 베이스 셸 재사용 원칙 (slow_planet.html 기준 — 파일은 삭제됨, 레이아웃 원칙만 계승)
 - 좌측 폰 프레임(`#canvas-wrap` 384×768) · 제목(`#phone-title`) · 하단 점수카드(`#cards`)
   · 우측 컨트롤 패널(`#sliders`: 슬라이더 4개 + 입력 버튼 + 트리거) — **레이아웃 그대로 유지**
 - 슬라이더 draft → `입력` 버튼 → `applyScores()` → `scores{}`/카드 반영 흐름 유지
@@ -216,14 +220,20 @@ slow-museum/
 - [x] 조명: 환경/반구/약한 sun + 존 스포트(점수 연동) + 정면벽 밝게(코너 대비) +
       왼쪽벽 전용 재질, 배경색. **조각별 개별 스포트라이트**(레이어 아님 — `distance`로
       전시대 밑동까지만, 바닥 컷오프), thinker는 emissive로 밝힘
-- [x] 조각 GLB 7종 **gltf-transform 최적화**(meshopt+webp+quantize, ~280MB→8MB),
-      원본 삭제·치환. 5개 전시대에 정규화 배치(`SCULPT_ADJ`로 scale/ry/ox/bright 보정)
+- [x] 조각 GLB **gltf-transform 최적화**(meshopt+webp+quantize, ~280MB→8MB),
+      원본 삭제·치환. 현재 5개만 전시대 배치(`SCULPT_ADJ`로 scale/ry/ox/bright 보정),
+      나머지 모델은 향후 사용 → 보존
 - [x] 전시대: 높이 개별값, 밝은 색(#ffffff), **접지(contact) 그림자** plane
-- [x] 벽 작품 매핑(Pillow로 흰 여백 자동 크롭, *.crop.png):
-  - 가운데(초상화/groom): picasso·perarl_earing·matisse·andy_warhol, **면적 1.7 고정**
+- [x] 벽 작품 매핑 (소스 Pillow 여백 크롭 → **JPEG 최적화 후 `<이름>.jpg` 원본명 치환**;
+      `.crop`/`.matted` 변형본·미사용 원본 삭제, 신규 추가 원본은 보존):
+  - 가운데(초상화/groom): picasso·pearl_earing·matisse·andy_warhol, **면적 1.7 고정**
+    (pearl_earing은 여백 안 자른 원본 비율)
   - 오른쪽(추상화/manage): 1·4=“Temporarily off view” 텍스트(작게 H1.3),
-    2·3=HK1(여백 합성 .matted)·HK2(원본 여백) — **세로길이 1.9·걸리는높이만 일치**, 가로는 비율대로
+    2·3=HK1(여백 합성본)·HK2(원본 여백) — **세로길이 1.9·걸리는높이만 일치**, 가로는 비율대로
   - 왼쪽(풍경화/rest): cypresses·water_lilies·“Temporarily off view”·inwang, **면적 2.3 고정**
+- [x] 로딩 최적화: 멀티스레드 dev 서버 + 회화 PNG→JPEG(원본명) → 초기 로드 대폭 단축
+- [x] 조각 외곽선 안티알리아싱: `EffectComposer`에 WebGL2 멀티샘플 타깃 전달
+      (후처리가 renderer MSAA를 우회하던 문제 해결)
 - [x] 피사계 심도(DOF): `EffectComposer`+`BokehPass`+`GammaCorrection`.
       focus=양수 월드거리(앞줄 조각), 모드별 자동, `aperture 0.0016 / maxblur 0.012`
 - [x] UI 키컬러 웜그레이 `#7d7169`, 제목 `#675d56`(키컬러 계열·약간 어둡게)
@@ -241,19 +251,22 @@ slow-museum/
   각 `zones.{key}.items[0..3]`이 프레임(생성 z순). 프레임=`makeFrame` 그룹
   (`userData.art`=그림 plane, `userData.frame`=테두리 box).
 - **벽 작품 배치/크기**: `GROOM_ART`(배열·순서), `GROOM_AREA`(면적) ·
-  `MANAGE_ART_H`/`MANAGE_NOTICE_H`(세로길이) + `[['HK1.matted.png',1],['HK2.jpg',2]]` ·
+  `MANAGE_ART_H`/`MANAGE_NOTICE_H`(세로길이) + `[['HK1.jpg',1],['HK2.jpg',2]]` ·
   `LANDSCAPE_AREA` + `[['cypresses',0],...]`. 사이즈 함수: `fitFrameByArea` / `fitFrameByHeight`.
+  로더는 모두 `asset/<존>/<이름>.jpg` 단일 원본명 로드(`GROOM_SRC` 등 변형 매핑 없음).
   안내문구는 `makeNoticeTexture(['Temporarily','off view'])` (canvas, `NOTICE_ASPECT`).
-- **조각**: `SCULPT_ADJ[name]={scale,ry,ox,bright}`(현재값 thrower/nike/brancusi_pbr/thinker),
+- **조각**: `SCULPT_ADJ[name]={scale,ry,ox,bright}`(현재값 thrower/nike/brancusi/thinker),
   `SCULPT_H`(균일 높이 기준), `PED_LAYOUT`(x,z,전시대높이,모델명). 조각별 스포트 = 로더 내
   `spot`(intensity 2.8, `spot.distance`=전시대 밑동까지). 접지그림자=`_contactShadowTex`.
 - **카메라/뷰**: `camera`(fov 66), `VIEW_SHIFT_Y`(렌즈시프트), `YAW_LIMIT`,
   `applyCam`, 트윈 `startTween`/`focusOn`/`returnToInit`, 오버뷰 `OVERVIEW`/`enterOverview`.
 - **DOF**: `bokeh.uniforms.aperture/maxblur`(블러 세기), `dofFocusDistance()`(모드별 초점).
   `composer` 패스 체인: RenderPass→BokehPass(needsSwap=true)→GammaCorrection.
+  `_composerTarget`=WebGL2 멀티샘플 타깃(`samples` 4) → 후처리에도 MSAA(조각 외곽선).
 - **dev 훅**: `window.__debug = { camera, scene, zones, focusables, focusOn,
   returnToInit, composer, bokeh, state() }` — 검증/디버그용.
 - **에셋 가공**: 조각 최적화 = `npx @gltf-transform/cli optimize <in> <out>
   --compress meshopt --texture-compress webp --texture-size 1024
-  --simplify-ratio 0.1 --simplify-error 0.01`. 이미지 여백 크롭 = Pillow
-  (코너색 기준 트림 → `*.crop.png`). HK1 여백합성 = 흰 캔버스 패딩.
+  --simplify-ratio 0.1 --simplify-error 0.01`. 이미지: Pillow로 여백 크롭(소스) →
+  **`sips -s format jpeg -s formatOptions 85`로 JPEG 최적화 → `<이름>.jpg` 원본명 치환**
+  (변형 suffix 미사용, 미최적화 소스는 삭제 금지). HK1 여백합성 = 흰 캔버스 패딩.
