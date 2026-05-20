@@ -72,7 +72,9 @@ slow-museum/
 - 깃 원격: `https://github.com/jaewonize/Slow-Museum` (origin/main). asset 포함 커밋됨.
 - 프리뷰: `preview_start`는 macOS Desktop TCC로 차단됨 → Bash 백그라운드로
   `python3 .claude/serve.py` 실행 → `http://localhost:8766/index.html`.
-  정적 서버라 자동 리로드 없음 → 강력 새로고침(Cmd+Shift+R) 또는 `?t=`+Date.now().
+  `serve.py`가 **no-store 헤더** 전송 → 턴마다 **일반 새로고침(Cmd+R)** 만으로 최신 씬.
+  서버 죽었으면 재기동: `lsof -ti tcp:8766|xargs kill -9; nohup python3
+  .claude/serve.py >.claude/serve.log 2>&1 &`
 - 검증 팁: 프리뷰 스크린샷 툴이 간헐 불안정 → 단일 `preview_eval`로 씬그래프/수치 확인이 안정적.
 
 ### 베이스 셸 재사용 원칙 (slow_planet.html 기준 — 파일은 삭제됨, 레이아웃 원칙만 계승)
@@ -255,11 +257,29 @@ slow-museum/
   `LANDSCAPE_AREA` + `[['cypresses',0],...]`. 사이즈 함수: `fitFrameByArea` / `fitFrameByHeight`.
   로더는 모두 `asset/<존>/<이름>.jpg` 단일 원본명 로드(`GROOM_SRC` 등 변형 매핑 없음).
   안내문구는 `makeNoticeTexture(['Temporarily','off view'])` (canvas, `NOTICE_ASPECT`).
-- **조각**: `SCULPT_ADJ[name]={scale,ry,ox,bright}`(현재값 thrower/nike/brancusi/thinker),
+- **조각**: `SCULPT_ADJ[name]={scale,ry,ox,oy,oz,bright}`(oy=Y −=아래, oz=Z +=앞/관람자쪽,
+  월드단위. 앉은자세 등 전시대 걸침용. oy −1.0=전시대높이만큼 아래),
   `SCULPT_H`(균일 높이 기준), `PED_LAYOUT`(x,z,전시대높이,모델명). 조각별 스포트 = 로더 내
   `spot`(intensity 2.8, `spot.distance`=전시대 밑동까지). 접지그림자=`_contactShadowTex`.
 - **카메라/뷰**: `camera`(fov 66), `VIEW_SHIFT_Y`(렌즈시프트), `YAW_LIMIT`,
   `applyCam`, 트윈 `startTween`/`focusOn`/`returnToInit`, 오버뷰 `OVERVIEW`/`enterOverview`.
+- **단독감상 프레이밍**(`computeSoloPose`): 그림=중심·`SOLO_FILL` 0.6(불변).
+  조각=`SOLO_FILL_SCULPT` 0.85(더 크게)·`SOLO_SCULPT_VBIAS` 0.42(<0.5=바닥 고정·위로 키움)·
+  `SOLO_SHIFT_SCULPT` 30(화면에서 위로 올리는 렌즈 시프트px). 그림 `SOLO_SHIFT_FRAME`=CARD_H/2−50(≈84).
+  `vHalf`로 비대칭 조준 시 상/하 안 잘리게 d 산출.
+- **단독감상 작품해설 라벨**(`#art-label`, `showArtLabel`/`updateArtLabelPos`/`hideArtLabel`):
+  미술관 캡션. **작품 기준 배치**(화면 X): (작품+전시대) bbox 바닥중앙 = `_alAnchor`(월드,
+  focus 동안 고정) → 매 프레임 `camera.project`로 투영, 그 **20px 아래**(조각·그림 동일).
+  제목=현재 파일명(`userData._art`/`_sculpt`, 추후 재라벨), 획득일=`LOADED_AT`(갤러리 로딩시각),
+  보상사유=`REWARD_MSG[zone]` 회화체 플레이스홀더(점수상승+근거 원시데이터). focus 시
+  `#cards` 숨김→복귀 복원. 단독감상에선 점수카드 항상 숨김(의도 확정).
+- **단독감상 조명**: 그림=`placeFrameFocus` 부드러운 정면광(`FOCUS_FRAME_INT`1.1·`DIST`3.0,
+  원거리=핫스팟 없음·시선 추종·채움 0). 존 스포트는 측면벽을 비스듬히 훑어 그림 정면이
+  어두워서 정면광 필요(과노출 났던 근접·고세기 1.5@1.2u 대신 원거리·저세기).
+  조각=`placeSculptFocus()` 일관 배치(`focusOn`·회전 동일 함수 → 첫프레임 과노출/점프 제거):
+  키=시선방향·`FOCUS_SCULPT_DIST`3.2·`FOCUS_SCULPT_INT`0.85·`KEYY`1.4 +
+  위 채움 `focusFill`(`FOCUS_SCULPT_FILL`0.5·`FILLY`3.0, 회전해도 고정→뒷면 안 까맘).
+  전부 조절 상수.
 - **DOF**: `bokeh.uniforms.aperture/maxblur`(블러 세기), `dofFocusDistance()`(모드별 초점).
   `composer` 패스 체인: RenderPass→BokehPass(needsSwap=true)→GammaCorrection.
   `_composerTarget`=WebGL2 멀티샘플 타깃(`samples` 4) → 후처리에도 MSAA(조각 외곽선).
@@ -270,3 +290,93 @@ slow-museum/
   --simplify-ratio 0.1 --simplify-error 0.01`. 이미지: Pillow로 여백 크롭(소스) →
   **`sips -s format jpeg -s formatOptions 85`로 JPEG 최적화 → `<이름>.jpg` 원본명 치환**
   (변형 suffix 미사용, 미최적화 소스는 삭제 금지). HK1 여백합성 = 흰 캔버스 패딩.
+
+## 전시 최적화 5턴 작업 (진행 중)
+
+각 폴더 20개씩. **파일명 알파벳순**으로 4개씩 5턴. 그림=벽 4프레임(좌→우=알파벳순),
+조각=회전 슬롯 #1·#3·#4·#5(알파벳 4개). **#2(앞열 중앙)=전 턴 고정 기준작 `thrower`**
+(`PED_FIXED`, 검증값 scale.9·ryπ/4·h0.3 그대로). thrower는 회전 시퀀스에서 제외(중복방지)
+→ thrower가 알파벳상 속한 T4는 회전이 3개(나머지 1슬롯 빔).
+
+### 규칙
+- 그림: mat(여백) 크롭(**Pillow** `.claude/matcrop.py`) → 종횡비 유지 →
+  벽별 면적상수로 옆 작품과 면적 유사. portrait `GROOM_AREA 1.7`(area-fit),
+  landscape `LANDSCAPE_AREA 2.3`(area-fit), abstract도 면적-fit으로 통일
+  (기존 height-fit HK1/HK2 제외 — 아래 검증유지 규칙).
+- **작업본 서픽스 규칙**: 원본 `<이름>.<ext>`는 **건드리지 않고** 크롭/최적화 결과를
+  `<이름>.work.jpg`로 저장. 로더는 `*.work.jpg` 있으면 그걸, 없으면 원본 로드.
+  최종 확정 시에만 `*.work.jpg`→원본명 치환(원본 삭제). 흰여백 추가 지정 그림은
+  지정 시 반영.
+- **검증유지 규칙**: 현재 씬에 이미 있던(=1차 검증된) 모델/그림이 알파벳 시퀀스에서
+  등장할 때는 **지금 셋팅값 그대로** 사용(재크롭/재계산 안 함).
+- 조각: 전시대 높이는 **사용자가 모델별로 지정** → 지정되면 per-sculpture로 기록.
+  높이/스케일/ry/ox/bright는 모델 속성으로 취급(전시대 슬롯과 무관하게 따라다님).
+- **모델↔전시대 페어링 불변식 (영구·전 턴 동일 적용)**:
+  - 전시대 *크기*(h·`SCULPT_PED_WX`·`SCULPT_PED_WZ`)는 **모델에 고정 페어링**.
+    전시 *슬롯/위치*는 턴마다 가변(`PED_ASSIGN`).
+  - **좌우(X)**: 전시대는 항상 슬롯 기본 X에 **중심(center) 정렬** → 크기가 변해도
+    중심 불변·좌우 대칭(예: balloon_dog 중심 = brancusi 중심의 대칭점).
+    wx 변경 시 중심 기준 양옆 균등 확장, 기본 위치로 재정렬.
+  - **앞뒤(Z)**: 전시대 **앞면(+Z) 라인 고정**, 깊이(wz) 증가는 **뒤(−Z)로만**.
+    앞뒤 정렬은 절대 불변. (`makePedestal`의 `zc=0.4−D/2`가 이를 보장)
+  - 검증값(T1): balloon_dog 전시대 Xc=−1.2 ↔ brancusi Xc=+1.2(대칭),
+    앞면 둘 다 world z=−5.1.
+
+### 검증된 베이스라인 (현재 셋팅값 — 등장 시 유지)
+- 조각 `SCULPT_ADJ` / 전시대높이(h): milo `{}`·h0.3 · thrower `{scale:.9,ry:π/4}`·h0.3 ·
+  nike `{scale:.9,ry:0}`·h0.3 · thinker `{scale:.88,ry:π/6,bright:.9,ox:0}`·h0.6 ·
+  brancusi `{scale:.66,ry:0}`·h1.0 · balloon_dog `{scale:.81,ry:55°(π/4+π/18),ox:0.2}`·**전시대폭 ×1.8** ·
+  ballerina `{scale:1,ry:0,bright:.9}` · abstract `{scale:1,ry:−45°(−90+45)}`. (`SCULPT_H` 1.7 정규화 기준)
+  전시대 가로폭 `SCULPT_PED_WX[name]`·깊이 `SCULPT_PED_WZ[name]`(기본 1, **해당 모델 전용·턴 유지**)
+  → `makePedestal(h,wx,wz)`: 가로=X 배율, 깊이=**앞면(+Z) 고정·뒤로만 확장**(조각 무왜곡).
+  현재 balloon_dog: WX 1.8 · WZ 1.4.
+- 그림: portrait area 1.7(pearl_earing은 **mat 크롭 안 함·원본 비율**),
+  abstract HK1/HK2 height-fit 1.9, landscape area 2.3.
+
+### 턴 배치표 (알파벳순)
+- portrait: T1 andy_warhol·bbc_interview·coco·dancers / T2 fifer·girl_cat·gogh·green_line /
+  T3 italian_woman·jeanne·lydia·milkmaid / T4 mona_lisa·pearl_earing·picasso·primavesi /
+  T5 raffaelo·renaissance·rose_hair·tango  (검증유지: pearl_earing·picasso T4.
+  andy_warhol는 가장자리 흰라인 제거 위해 `!` 해제 → 좌4·우10·하10px 크롭 work본 사용, 원본 보존)
+- abstract: T1 HK1·HK2·YK_1·YK_2 / T2 joan_miro_1·joan_miro_2·jp_1·jp_2 /
+  T3 malevichi_1·malevichi_2·malevichi_3·matisse_1 / T4 matisse_2·mondrian_1·mondrian_2·paul_klee_1 /
+  T5 paul_klee_3·paul_klee_4·rothko_1·rothko_2  (검증유지: HK1·HK2 T1, height-fit 1.9)
+- landscape: T1 No180·campo_vaccino·cite·cypresses / T2 early_morning·exotic_forest·garden·grande_jatte /
+  T3 inwang·lady_on_a_beach·le_reve·little_house / T4 roadtoyork·rouen_athedral·schloss_kammer·suburb /
+  T5 summer·tollgate·view_of_venice·water_lilies  (검증유지: cypresses T1, inwang T3, water_lilies T5)
+- sculpture(슬롯 #1·#3·#4·#5): T1 abstract·ballerina·balloon_dog·brancusi /
+  T2 bust·carol_gold·colossus·henry_moor / T3 ionia·listening·mauryan·milo /
+  T4 nike·song·thinker·thrower / T5 tulip·walker·warrior·zeus
+  (검증유지: brancusi T1, milo T3, nike·thinker·thrower T4)
+
+### 진행 상황
+- [x] T1  - [x] T2 (사용자 승인 완료)  - [~] T3 (씬 구성됨·검토중)  - [ ] T4  - [ ] T5
+  - 코드: 그림/조각 로더 턴 구동화(`TURN`·`EXHIBIT`·`SCULPT_SEQ`·`PED_ASSIGN`),
+    MANAGE_AREA=2.0, #2=고정 thrower(`PED_FIXED`), `PED_DEFAULT_H`=0.45
+  - **T1 확정값**: 조각 보정 balloon_dog `{scale:.81,ry:55°,ox:0.2,WX1.8,WZ1.4}` ·
+    ballerina `{bright:.9}` · abstract `{ry:−45°}`. 전시대높이=brancusi 1.0,
+    나머지(abstract·ballerina·balloon_dog) 기본 0.45 수용(별도 지정 없었음).
+    그림: 전부 `.work.jpg`(원본 보존), andy_warhol 좌4·우10·하10 크롭.
+  - **T2 조각↔슬롯**: #1=bust · #3=henry_moor · #4=colossus · #5=carol_gold · #2=비움
+    (SCULPT_SEQ T2 구간 **수동 배치** — 알파벳 턴멤버십은 불변).
+    그림 12개 `.work.jpg` 생성(원본 보존, 일부 mat 크롭됨).
+    girl_cat(구 gir_cat 오타수정): 수동 크롭 L22·R7·T4·B30(원본 675×1000).
+    early_morning: 흰매트 제거 L94·R104·T54·B50(원본 1134×852).
+    exotic_forest: 아트포스터(텍스트·키라인 포함)→원화만 크롭(622×827) 후
+    깨끗한 흰 mat(짧은변 9%≈56px) 재합성. 원본 보존.
+  - **T2 조각 보정**: bust `{scale:.792}`·전시대 h1.0(brancusi와 동일) ·
+    carol_gold `{scale:1.17,ox:0.075}`·전시대 h0.15 · colossus `{scale:1.0935}`·전시대 h0.3 ·
+    henry_moor `{scale:.72,ry:90°,ox:0.08}`·전시대 h0.6(thinker와 동일)·`WX 1.15`(룰대로 슬롯센터 대칭).
+    (h0 → `makePedestal` base/그림자 생략, 조각 바닥에 직접)
+  - **T3 조각↔슬롯**: #1=mauryan · #3=listening · #4=ionia · #5=milo · **#2=thrower(고정 기준작)**
+    (SCULPT_SEQ T3 구간 수동 배치 — 알파벳 턴멤버십 불변).
+    listening 전시대 h1.0(bust와 동일)·앉은자세 `{oy:-0.79, oz:0.4}`(전시대 걸침, 튜닝 중).
+    h 0.936 → **전부 1.0으로 정리**(brancusi·bust·listening). `oy`·`oz` 보정 신설.
+    milo는 **검증유지**(T1: h0.3·SCULPT_ADJ 무) → 기존값 그대로. listening 신규(기본).
+    ionia `{scale:0.855}`·mauryan `{scale:1.1}` 둘 다 **전시대 없음(h0)·접지그림자만**
+    (`makePedestal`: 접지 그림자를 `if(h>0)` 밖으로 빼 **항상 생성** → h0도 바닥 그림자.
+    h>0 동작 동일). 그림: inwang **검증유지**(원본 직접·area2.3),
+    나머지 11개 `.work.jpg` 생성(원본 보존, 일부 mat 크롭).
+    milkmaid: 수동 크롭 L14·R30·T10·B34(원본 863×1000).
+    little_house: 수동 크롭 R30·B30(원본 512×507).
+  - **T3 검토 대기**: 조각 scale/높이/ry/ox/bright + 그림 mat·크기 피드백 → 기록 후 반영

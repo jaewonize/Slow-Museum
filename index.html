@@ -75,6 +75,26 @@ canvas:active { cursor:grabbing; }
 .card .name { font-size: 13px; color: #666; font-weight: 600; }
 .card .score { font-size: 26px; color: #7d7169; font-weight: 700; line-height: 1.1; }
 
+/* 단독 감상 작품 해설(미술관 캡션) — 조각=위, 그림=아래 여백 */
+#art-label {
+  position: absolute;
+  left: 28px; right: 28px;
+  text-align: center;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  color: #5f564f;
+}
+#art-label.show { opacity: 1; }
+#art-label .al-title {
+  font-size: 19px; font-weight: 700; color: #4f473f;
+  letter-spacing: -0.01em; margin-bottom: 7px;
+}
+#art-label .al-meta {
+  font-size: 12px; font-weight: 500; line-height: 1.6; color: #8a7f74;
+}
+
 #sliders {
   width: 384px;
   height: 768px;
@@ -190,6 +210,10 @@ canvas:active { cursor:grabbing; }
     <div class="card"><div class="name">잘 쉬기</div><div class="score" id="card-rest">60</div></div>
     <div class="card"><div class="name">잘 가꾸기</div><div class="score" id="card-groom">48</div></div>
     <div class="card"><div class="name">잘 다스리기</div><div class="score" id="card-manage">80</div></div>
+  </div>
+  <div id="art-label">
+    <div class="al-title"></div>
+    <div class="al-meta"></div>
   </div>
 </div>
 
@@ -343,29 +367,34 @@ const _contactShadowTex = (function () {
   return new THREE.CanvasTexture(c);
 })();
 
-function makePedestal(h) {
+function makePedestal(h, wx = 1, wz = 1) {      // wx=가로(X)·wz=깊이(Z) 폭 배율 (조각 무왜곡)
   const g = new THREE.Group();
   let topY = 0;
-  if (h > 0) {
+  // [불변식] X: 로컬 x=0 → 전시대/그림자 중심은 항상 슬롯 기본 X(좌우 대칭·중심 정렬,
+  //  wx 변경 시 중심 기준 균등 확장). Z: 앞면(+Z) 라인 고정, wz 증가는 뒤로만.
+  const D = 0.8 * wz;                            // 깊이는 앞면(+Z) 고정, 뒤(-Z)로만 확장
+  const zc = 0.4 - D / 2;                        // 앞면 로컬 +0.4 고정 (wz=1 → zc=0, 기존 동일)
+  if (h > 0) {                                   // 전시대 base (h=0이면 생략 → 바닥에 직접)
     const base = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, h, 0.8),
+      new THREE.BoxGeometry(0.8 * wx, h, D),
       new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 })
     );
-    base.position.y = h / 2;
+    base.position.set(0, h / 2, zc);
     base.castShadow = true; base.receiveShadow = true;
     g.add(base);
     topY = h;
-    // 바닥 접점 그림자: 베이스보다 살짝 넓게, 바닥 바로 위에 깔기
-    const shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.5, 1.5),
-      new THREE.MeshBasicMaterial({ map: _contactShadowTex, transparent: true, depthWrite: false })
-    );
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.012;     // 바닥 살짝 위 (z-fighting 방지)
-    shadow.renderOrder = 1;        // 바닥 위에 덧그리기
-    shadow.userData.noPick = true; // 클릭 레이캐스트 제외 (바닥 클릭=복귀 보존)
-    g.add(shadow);
   }
+  // 바닥 접점 그림자: 전시대 유무와 무관하게 항상 (h0=바닥 직접 세움도 접지 그림자)
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.5 * wx, 1.5 * wz),
+    new THREE.MeshBasicMaterial({ map: _contactShadowTex, transparent: true, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.z = zc;          // 베이스 중심과 정렬
+  shadow.position.y = 0.012;       // 바닥 살짝 위 (z-fighting 방지)
+  shadow.renderOrder = 1;          // 바닥 위에 덧그리기
+  shadow.userData.noPick = true;   // 클릭 레이캐스트 제외 (바닥 클릭=복귀 보존)
+  g.add(shadow);
   g.userData.topY = topY;   // 조각이 놓일 전시대 윗면 높이 (없으면 0=바닥)
   return g;
 }
@@ -379,20 +408,68 @@ const zones = {
 };
 Object.values(zones).forEach(z => scene.add(z.group));
 
-// 중앙홀 — 조각 전시대: 앞열 3(#1,#2,#3) + 뒷열 2(#4,#5)
-// [x, z, 전시대높이]. 지금은 컨셉 시연용 고정값 (좌측 컨트롤 미연동).
-//   #1,#2,#3 = 0.3 · #4 = 0.6 · #5 = 0.936
-// [x, z, 전시대높이, 조각모델명(asset/sculpture/<name>.glb)]
-const PED_LAYOUT = [
-  [-2.0, -1.8, 0.3,   'milo'],          // #1 앞열-좌 (앞으로 당김)
-  [ 0.0, -1.8, 0.3,   'thrower'],       // #2 앞열-중 (앞으로 당김)
-  [ 2.0, -1.8, 0.3,   'nike'],          // #3 앞열-우 (앞으로 당김)
-  [-1.2, -5.5, 0.6,   'thinker'],       // #4 뒷열-좌
-  [ 1.2, -5.5, 0.936, 'brancusi'],  // #5 뒷열-우
-];
-PED_LAYOUT.forEach(([x, z, h]) => {
-  const p = makePedestal(h);
+// 중앙홀 — 조각 전시대 5곳: 앞열 3(#1,#2,#3) + 뒷열 2(#4,#5).
+// 위치=`PED_POS`(고정), 전시대 높이/폭=모델별(`SCULPT_PED_H/WX/WZ`, 페어링 불변식),
+// 턴별 배정=`PED_ASSIGN`(#2는 `PED_FIXED` thrower 고정).
+// ─── 전시 5턴(알파벳순 4개씩). 전시대 #2(앞열-중)는 항상 비움. CLAUDE.md "전시 최적화 5턴 작업" ───
+const TURN = 3;                                   // 현재 전시 턴 (1..5) — 그림/조각 공통
+const SCULPT_H = 1.7;                             // 조각 목표 높이(월드) — 균일 정규화
+// 모델별 보정: scale=균일높이 대비 배율, ry=Y회전, ox=X오프셋, oy=Y오프셋(−=아래),
+//   oz=Z오프셋(+=앞/관람자 쪽, 월드단위), bright=자기발광
+const SCULPT_ADJ = {
+  thrower:     { scale: 0.9,  ry: Math.PI / 4 },
+  nike:        { scale: 0.9,  ry: 0 },
+  brancusi:    { scale: 0.66, ry: 0 },
+  thinker:     { scale: 0.88, ry: Math.PI / 6, bright: 0.9, ox: 0.0 },
+  balloon_dog: { scale: 0.81, ry: Math.PI / 4 + Math.PI / 18, ox: 0.2 },  // 55° · 0.9×0.9 · 우로 0.2
+  ballerina:   { scale: 1,    ry: 0, bright: 0.9 },               // 너무 어두워 자기발광 보정
+  abstract:    { scale: 1,    ry: -Math.PI / 2 + Math.PI / 4 },   // Y −90°+45° = −45°
+  bust:        { scale: 0.792, ry: 0 },                           // 0.72×1.1 (전시대=brancusi와 동일)
+  carol_gold:  { scale: 1.17,  ry: 0, ox: 0.075 },                // 1.3×0.9·우로 0.075
+  colossus:    { scale: 1.0935, ry: 0 },                          // 1.215×0.9 (전시대 h0.3)
+  henry_moor:  { scale: 0.72,  ry: Math.PI / 2, ox: 0.08 },       // 0.8×0.9·Y90°·우로 0.08(전시대=thinker)
+  ionia:       { scale: 0.855, ry: 0 },                           // 0.9×0.95 (T3)
+  mauryan:     { scale: 1.1,   ry: 0 },                           // 1.1배 (T3)
+  listening:   { scale: 1,     ry: 0, oy: -0.79, oz: 0.4 },       // 앉은 자세: 아래 −0.79·앞 +0.4(전시대 걸침)
+};
+// 모델별 전시대 높이(검증값). 미지정 신규 = PED_DEFAULT_H → 검토 후 여기에 확정 누적
+const SCULPT_PED_H = { milo: 0.3, thrower: 0.3, nike: 0.3, thinker: 0.6, brancusi: 1.0,
+  bust: 1.0,          // brancusi와 동일 전시대
+  henry_moor: 0.6,    // thinker와 동일 전시대
+  carol_gold: 0.15,   // 낮은 전시대(0.15) 위에
+  colossus: 0.3,      // 전시대(0.3) 위에
+  ionia: 0,           // 전시대 없이 바닥 직접(접지 그림자만)
+  mauryan: 0,         // 전시대 없이 바닥 직접(접지 그림자만)
+  listening: 1.0 };   // bust 전시대와 동일(h1.0)
+const PED_DEFAULT_H = 0.45;
+// 모델별 전시대 가로(X) 폭 배율 (기본 1, 조각 무왜곡). 해당 모델에만 적용·턴 넘어가도 유지
+const SCULPT_PED_WX = { balloon_dog: 1.8, henry_moor: 1.15 };  // 룰대로 슬롯센터 기준 대칭 확장
+// 모델별 전시대 깊이(Z) 배율 (기본 1, 앞면 고정·뒤로만 확장). 해당 모델 전용·턴 유지
+const SCULPT_PED_WZ = { balloon_dog: 1.4 };
+const SCULPT_SEQ = [
+  'abstract','ballerina','balloon_dog','brancusi', 'bust','henry_moor','colossus','carol_gold', // T2 수동배치: #1bust·#3henry_moor·#4colossus·#5carol_gold
+
+  'mauryan','listening','ionia','milo', 'nike','song','thinker','thrower', // T3 수동배치: #1mauryan·#3listening·#4ionia·#5milo
+  'tulip','walker','warrior','zeus' ];
+const PED_POS = [ [-2.0,-1.8], [0.0,-1.8], [2.0,-1.8], [-1.2,-5.5], [1.2,-5.5] ]; // #1..#5
+const PED_SLOTS = [0, 2, 3, 4];                   // 회전 슬롯 #1·#3·#4·#5 (index 0,2,3,4)
+// #2(index 1, 앞열 중앙) = 전 턴 고정 기준작. 회전 시퀀스에선 제외(중복 방지)
+const PED_FIXED = { 1: 'thrower' };
+const _fixedNames = Object.values(PED_FIXED);
+const _turnSculpts = SCULPT_SEQ.slice((TURN - 1) * 4, TURN * 4)
+  .filter(n => !_fixedNames.includes(n));
+const PED_ASSIGN = {};
+PED_SLOTS.forEach((slot, k) => { if (_turnSculpts[k]) PED_ASSIGN[slot] = _turnSculpts[k]; });
+Object.assign(PED_ASSIGN, PED_FIXED);            // 고정 슬롯 적용(회전 위에 덮어씀)
+PED_POS.forEach(([x, z], i) => {
+  const sname = PED_ASSIGN[i];
+  if (!sname) return;                             // 빈 전시대(#2 등) → 미생성
+  const h = (SCULPT_PED_H[sname] != null) ? SCULPT_PED_H[sname] : PED_DEFAULT_H;
+  const wx = (SCULPT_PED_WX[sname] != null) ? SCULPT_PED_WX[sname] : 1;
+  const wz = (SCULPT_PED_WZ[sname] != null) ? SCULPT_PED_WZ[sname] : 1;
+  const p = makePedestal(h, wx, wz);
   p.position.set(x, 0, z);
+  p.userData._sculpt = sname;
   zones.move.group.add(p);
   zones.move.items.push(p);
 });
@@ -516,73 +593,11 @@ zones.groom.items.forEach(g  => registerObject(g, 'groom',  new THREE.Vector3(0,
 zones.manage.items.forEach(g => registerObject(g, 'manage', new THREE.Vector3(-1, 0, 0)));
 zones.move.items.forEach(g   => registerObject(g, 'move',   new THREE.Vector3(0, 0, 1)));
 
-// ─── 초상화: 가운데 벽 액자에 매핑 (원본 이미지, 비율별 면적 고정 크기) ───
-const GROOM_AREA = 1.7;                          // 액자 면적 고정 → 비율 달라도 체감 크기 균일
-const GROOM_ART = ['picasso', 'pearl_earing', 'matisse', 'andy_warhol']; // 좌→우 (frame 0..3)
+// ─── 벽 작품: 알파벳순 5턴(TURN), 4프레임 좌→우. CLAUDE.md "전시 최적화 5턴 작업" ───
+// 'name!' = 검증유지(원본 <name>.jpg 직접·재크롭X), 그 외 <name>.work.jpg
+// 추상 HK1/HK2만 height-fit(MANAGE_ART_H), 그 외 면적-fit(존별 AREA)
+const GROOM_AREA = 1.7, MANAGE_AREA = 2.0, LANDSCAPE_AREA = 2.3, MANAGE_ART_H = 1.9;
 const texLoader = new THREE.TextureLoader();
-GROOM_ART.forEach((name, i) => {
-  const f = zones.groom.items[i];
-  if (!f) return;
-  texLoader.load('asset/portrait/' + name + '.jpg', tex => {
-    tex.encoding = THREE.sRGBEncoding;            // 컬러 텍스처 → sRGB (감마/톤매핑 정확)
-    const iw = tex.image.naturalWidth || tex.image.width;
-    const ih = tex.image.naturalHeight || tex.image.height;
-    const r = iw / ih;                            // 이미지 가로/세로 비(원본/크롭 그대로)
-    const H = Math.sqrt(GROOM_AREA / r), W = r * H;
-    const art = f.userData.art, box = f.userData.frame;
-    art.geometry.dispose();
-    art.geometry = new THREE.PlaneGeometry(W, H);
-    art.material.map = tex;
-    art.material.color.set(0xffffff);
-    art.material.needsUpdate = true;
-    box.geometry.dispose();
-    box.geometry = new THREE.BoxGeometry(W + 0.16, H + 0.16, 0.07);
-  }, undefined, err => console.error('portrait load failed:', name, err));
-});
-
-// ─── 추상화: 오른쪽 벽. 1·4번=안내 텍스트(작게), 2·3번=추상화(세로길이·걸리는높이만 일치, 가로는 비율대로) ───
-const MANAGE_ART_H   = 1.9;                       // 추상화 액자 세로길이(두 작품 동일, 안내액자보다 큼)
-const MANAGE_NOTICE_H = 1.3;                      // 안내 액자 세로길이(작게)
-const NOTICE_ASPECT  = 0.74;
-function makeNoticeTexture(lines) {
-  const cw = 760, ch = Math.round(cw / NOTICE_ASPECT);
-  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
-  const x = c.getContext('2d');
-  x.fillStyle = '#ece6d8'; x.fillRect(0, 0, cw, ch);          // 깨끗한 카드 톤
-  x.fillStyle = '#565656'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  const fs = Math.round(cw * 0.11);
-  x.font = '600 ' + fs + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
-  const lh = fs * 1.35, y0 = ch / 2 - ((lines.length - 1) * lh) / 2;
-  lines.forEach((ln, k) => x.fillText(ln, cw / 2, y0 + k * lh));
-  const t = new THREE.CanvasTexture(c);
-  t.encoding = THREE.sRGBEncoding;
-  return t;
-}
-// 세로길이 frameH 고정, 가로는 비율대로(억지 동일크기 X). y(걸리는 높이)는 생성 시 1.9로 공통.
-function fitFrameByHeight(f, tex, aspect, frameH) {
-  const H = frameH, W = frameH * aspect;
-  const art = f.userData.art, box = f.userData.frame;
-  art.geometry.dispose(); art.geometry = new THREE.PlaneGeometry(W, H);
-  art.material.map = tex; art.material.color.set(0xffffff); art.material.needsUpdate = true;
-  box.geometry.dispose(); box.geometry = new THREE.BoxGeometry(W + 0.16, H + 0.16, 0.07);
-}
-[zones.manage.items[0], zones.manage.items[3]].forEach(f => {
-  if (f) fitFrameByHeight(f, makeNoticeTexture(['Temporarily', 'off view']), NOTICE_ASPECT, MANAGE_NOTICE_H);
-});
-// HK2=원본(여백 포함, 크롭X), HK1=HK2와 비슷한 흰 여백 추가본
-[['HK1.jpg', 1], ['HK2.jpg', 2]].forEach(([file, i]) => {
-  const f = zones.manage.items[i];
-  if (!f) return;
-  texLoader.load('asset/abstract/' + file, tex => {
-    tex.encoding = THREE.sRGBEncoding;
-    const iw = tex.image.naturalWidth || tex.image.width;
-    const ih = tex.image.naturalHeight || tex.image.height;
-    fitFrameByHeight(f, tex, iw / ih, MANAGE_ART_H);
-  }, undefined, err => console.error('abstract load failed:', file, err));
-});
-
-// ─── 풍경화: 왼쪽 벽. 순서 cypress·water_lilies·안내문구·inwang (면적 고정, 비율대로) ───
-const LANDSCAPE_AREA = 2.3;
 function fitFrameByArea(f, tex, aspect, area) {
   const H = Math.sqrt(area / aspect), W = aspect * H;
   const art = f.userData.art, box = f.userData.frame;
@@ -590,37 +605,55 @@ function fitFrameByArea(f, tex, aspect, area) {
   art.material.map = tex; art.material.color.set(0xffffff); art.material.needsUpdate = true;
   box.geometry.dispose(); box.geometry = new THREE.BoxGeometry(W + 0.16, H + 0.16, 0.07);
 }
-{
-  const fn = zones.rest.items[2];
-  if (fn) fitFrameByArea(fn, makeNoticeTexture(['Temporarily', 'off view']), NOTICE_ASPECT, LANDSCAPE_AREA);
+function fitFrameByHeight(f, tex, aspect, frameH) {
+  const H = frameH, W = frameH * aspect;
+  const art = f.userData.art, box = f.userData.frame;
+  art.geometry.dispose(); art.geometry = new THREE.PlaneGeometry(W, H);
+  art.material.map = tex; art.material.color.set(0xffffff); art.material.needsUpdate = true;
+  box.geometry.dispose(); box.geometry = new THREE.BoxGeometry(W + 0.16, H + 0.16, 0.07);
 }
-[['cypresses', 0], ['water_lilies', 1], ['inwang', 3]].forEach(([name, i]) => {
-  const f = zones.rest.items[i];
-  if (!f) return;
-  texLoader.load('asset/landscape/' + name + '.jpg', tex => {
-    tex.encoding = THREE.sRGBEncoding;
-    const iw = tex.image.naturalWidth || tex.image.width;
-    const ih = tex.image.naturalHeight || tex.image.height;
-    fitFrameByArea(f, tex, iw / ih, LANDSCAPE_AREA);
-  }, undefined, err => console.error('landscape load failed:', name, err));
+const EXHIBIT = {
+  groom:  { dir: 'portrait',  area: GROOM_AREA, seq: [
+    'andy_warhol','bbc_interview','coco','dancers', 'fifer','girl_cat','gogh','green_line',
+    'italian_woman','jeanne','lydia','milkmaid', 'mona_lisa','pearl_earing!','picasso!','primavesi',
+    'raffaelo','renaissance','rose_hair','tango' ] },
+  manage: { dir: 'abstract',  area: MANAGE_AREA, seq: [
+    'HK1!','HK2!','YK_1','YK_2', 'joan_miro_1','joan_miro_2','jp_1','jp_2',
+    'malevichi_1','malevichi_2','malevichi_3','matisse_1', 'matisse_2','mondrian_1','mondrian_2','paul_klee_1',
+    'paul_klee_3','paul_klee_4','rothko_1','rothko_2' ] },
+  rest:   { dir: 'landscape', area: LANDSCAPE_AREA, seq: [
+    'No180','campo_vaccino','cite','cypresses!', 'early_morning','exotic_forest','garden','grande_jatte',
+    'inwang!','lady_on_a_beach','le_reve','little_house', 'roadtoyork','rouen_athedral','schloss_kammer','suburb',
+    'summer','tollgate','view_of_venice','water_lilies!' ] },
+};
+const MANAGE_HEIGHT_KEEP = { HK1: 1, HK2: 1 };    // 추상 검증유지 → height-fit 1.9
+Object.keys(EXHIBIT).forEach(zk => {
+  const z = EXHIBIT[zk];
+  z.seq.slice((TURN - 1) * 4, TURN * 4).forEach((entry, i) => {
+    const f = zones[zk].items[i];
+    if (!f) return;
+    const keep = entry.charAt(entry.length - 1) === '!';
+    const name = keep ? entry.slice(0, -1) : entry;
+    f.userData._art = name;                       // 단독감상 라벨용(현재는 파일명)
+    const src = 'asset/' + z.dir + '/' + name + (keep ? '.jpg' : '.work.jpg');
+    texLoader.load(src, tex => {
+      tex.encoding = THREE.sRGBEncoding;
+      const iw = tex.image.naturalWidth || tex.image.width;
+      const ih = tex.image.naturalHeight || tex.image.height;
+      const aspect = iw / ih;
+      if (zk === 'manage' && MANAGE_HEIGHT_KEEP[name]) fitFrameByHeight(f, tex, aspect, MANAGE_ART_H);
+      else fitFrameByArea(f, tex, aspect, z.area);
+    }, undefined, err => console.error(zk + ' load failed:', name, err));
+  });
 });
 
-// ─── 조각 GLB 로드 → 전시대 위에 정규화 배치 ───
-const SCULPT_H = 1.7;                          // 조각 목표 높이(월드 단위) — 균일 정규화
-// 모델별 보정: scale=균일높이 대비 배율, ry=Y축 회전(라디안, 양수=반시계/위에서 봤을 때)
-const SCULPT_ADJ = {
-  thrower:      { scale: 0.9, ry: Math.PI / 4 },
-  nike:         { scale: 0.9, ry: 0 },
-  brancusi: { scale: 0.66, ry: 0 },
-  thinker:      { scale: 0.88, ry: Math.PI / 6, bright: 0.9, ox: 0.0 },  // 반시계30° · 밝힘 · X중심정렬(우로 0.12 밀어넣음)
-};
+// ─── 조각 GLB 로드 → 전시대 위에 정규화 배치 (이번 턴 생성된 전시대만) ───
 const gltfLoader = new THREE.GLTFLoader();
 if (window.MeshoptDecoder) gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 const _sbox = new THREE.Box3(), _ssz = new THREE.Vector3(), _sctr = new THREE.Vector3();
-PED_LAYOUT.forEach((spec, i) => {
-  const name = spec[3];
+zones.move.items.forEach(ped => {
+  const name = ped.userData._sculpt;
   if (!name) return;
-  const ped = zones.move.items[i];
   const adj = SCULPT_ADJ[name] || { scale: 1, ry: 0 };
   gltfLoader.load('asset/sculpture/' + name + '.glb', gltf => {
     const m = gltf.scene;
@@ -630,7 +663,7 @@ PED_LAYOUT.forEach((spec, i) => {
     const s = (SCULPT_H / _ssz.y) * adj.scale;  // 높이 기준 균일 스케일 × 모델별 배율
     m.scale.setScalar(s);
     // 바닥면을 전시대 윗면에, x·z 중심을 전시대 중심에 정렬
-    m.position.set(-_sctr.x * s + (adj.ox || 0), ped.userData.topY - _sbox.min.y * s, -_sctr.z * s);
+    m.position.set(-_sctr.x * s + (adj.ox || 0), ped.userData.topY - _sbox.min.y * s + (adj.oy || 0), -_sctr.z * s + (adj.oz || 0));
     m.traverse(o => {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = true;
@@ -674,14 +707,47 @@ PED_LAYOUT.forEach((spec, i) => {
 // 단독 감상 시 해당 작품을 확실히 밝히는 포커스 조명
 const focusLight = new THREE.PointLight(0xfff2dc, 0, 9, 1.5);
 scene.add(focusLight);
+const focusFill = new THREE.PointLight(0xfff6ec, 0, 16, 1.0);  // 조각: 위 채움광(회전해도 뒷면 안 까맘)
+scene.add(focusFill);
+// ── 조각 단독감상 조명 (조절용 상수) ──
+const FOCUS_SCULPT_INT   = 0.85;  // 키 세기 (과노출 방지: 기존 1.5·1.2u → 약하게·멀리)
+const FOCUS_SCULPT_DIST  = 3.2;   // 키: target에서 시선방향 거리
+const FOCUS_SCULPT_KEYY  = 1.4;   // 키 높이(target 위)
+const FOCUS_SCULPT_FILL  = 0.5;   // 위 채움광 세기
+const FOCUS_SCULPT_FILLY = 3.0;   // 채움광 높이(target 위)
+// ── 그림 단독감상 조명(조절용): 평면 그림용 부드러운 정면광 (과노출 방지: 원거리·저세기) ──
+const FOCUS_FRAME_INT  = 1.1;     // 그림 정면광 세기
+const FOCUS_FRAME_DIST = 3.0;     // 그림 정면광: target에서 시선방향 거리(가까우면 핫스팟)
+const _flv = new THREE.Vector3();
 let focusedZone = null;
+// 조각 키: '현재 시선 방향'으로 target에서 고정 거리 → focusOn/회전 일관(첫프레임 과노출·점프 제거)
+function placeSculptFocus(fromPos) {
+  _flv.copy(fromPos).sub(soloTarget); _flv.y = 0;
+  if (_flv.lengthSq() < 1e-6) _flv.set(0, 0, 1);
+  _flv.normalize();
+  focusLight.position.copy(soloTarget).addScaledVector(_flv, FOCUS_SCULPT_DIST);
+  focusLight.position.y += FOCUS_SCULPT_KEYY;
+  focusLight.intensity = FOCUS_SCULPT_INT;
+  focusFill.position.set(soloTarget.x, soloTarget.y + FOCUS_SCULPT_FILLY, soloTarget.z);
+  focusFill.intensity = FOCUS_SCULPT_FILL;
+}
+// 그림: 시선 방향에서 평면을 균일하게 비추는 정면광(원거리=핫스팟 없음). 채움광 불필요
+function placeFrameFocus(fromPos) {
+  _flv.copy(fromPos).sub(soloTarget);
+  if (_flv.lengthSq() < 1e-6) _flv.set(0, 0, 1);
+  _flv.normalize();
+  focusLight.position.copy(soloTarget).addScaledVector(_flv, FOCUS_FRAME_DIST);
+  focusLight.intensity = FOCUS_FRAME_INT;
+  focusFill.intensity = 0;
+}
 function applyFocusLighting(data) {
   updateZoneLighting();                    // 스코어 기반으로 리셋 후
   focusedZone = data.zone;
-  const dir = data.camPos.clone().sub(data.target).normalize();
-  focusLight.position.copy(data.target).addScaledVector(dir, 1.2);
-  focusLight.position.y += 0.3;
-  focusLight.intensity = 1.5;
+  if (data.zone === 'move') {              // 조각: 일관된 키 + 위 채움
+    placeSculptFocus(data.camPos);
+  } else {                                 // 그림: 부드러운 정면광(존 스포트만으론 측면벽 어두움)
+    placeFrameFocus(data.camPos);
+  }
   Object.keys(zones).forEach(k => {        // 다른 존은 어둡게
     if (k !== data.zone) zones[k].spot.intensity *= 0.22;
   });
@@ -689,18 +755,22 @@ function applyFocusLighting(data) {
 function clearFocusLighting() {
   focusedZone = null;
   focusLight.intensity = 0;
+  focusFill.intensity = 0;
   updateZoneLighting();
 }
 
 // ─── 단독 감상: 깨끗한 배경 벽 + 한 작품만 격리해서 돌려보기 ───
 const SOLO_FOV = 38;
-const SOLO_FILL = 0.6;                        // 작품이 가용 영역의 60%만 차지 → 여백 확보
+const SOLO_FILL = 0.6;                        // 그림: 가용 영역의 60%만 차지 → 여백 확보
+const SOLO_FILL_SCULPT = 0.85;                // 조각: 단독감상 시 더 크게 채움(그림보다 크게)
+const SOLO_SCULPT_VBIAS = 0.42;               // 조각 조준 높이(0=바닥,1=머리). <0.5 → 아래 고정·위로 키움
 const _tanV = Math.tan(SOLO_FOV * Math.PI / 360);
 const _tanH = _tanV * (W / H);                // 포트레이트 → 수평 화각은 절반
 // 그림(액자)은 화면 센터가 아니라 하단 점수카드 위 영역 기준으로 정렬.
 const CARD_H = 268;                           // #cards 높이(CSS)와 동일
 const CLEAR_H = H - CARD_H;                   // 카드 위 가용 세로 영역(≈500)
-const SOLO_SHIFT_FRAME = CARD_H / 2;          // 가용 영역 중앙으로 올리는 렌즈 시프트(≈134)
+const SOLO_SHIFT_FRAME = CARD_H / 2 - 50;     // 그림 단독감상 상승 시프트(≈84, 기존 134에서 50↓)
+const SOLO_SHIFT_SCULPT = 30;                 // 조각 단독감상: 화면에서 위로 올리는 시프트(px)
 const soloBgColor = 0xece6d8;                 // 깨끗한 갤러리 벽 색
 const BG0 = scene.background.clone();
 const soloBackdrop = new THREE.Mesh(
@@ -727,7 +797,8 @@ function applySoloOrbit() {
   soloBackdrop.position.copy(soloTarget)
     .addScaledVector(_off.clone().normalize(), -SOLO_BACKDROP_DIST);  // 항상 작품 뒤
   soloBackdrop.quaternion.copy(quatLookingAt(soloBackdrop.position, camera.position));
-  focusLight.position.copy(camera.position); focusLight.position.y += 0.4; // 보는 쪽 조명
+  if (focusedZone === 'move') placeSculptFocus(camera.position);       // 조각: 키 일관 재배치
+  else if (focusedZone) placeFrameFocus(camera.position);              // 그림: 정면광이 시선 따라 균일
 }
 
 // 갤러리 전체 숨기고 작품 하나(keep)만 남김 / 해제
@@ -746,9 +817,15 @@ function computeSoloPose(group, dir, isFrame) {
   _box.getCenter(_bc); _box.getSize(_bs);
   const oh = _bs.y;
   const ow = Math.max(Math.hypot(_bs.x, _bs.z), _bs.x, _bs.z); // 회전 중에도 안 잘리게 대각선 기준
-  const vFit = isFrame ? SOLO_FILL * (CLEAR_H / H) : SOLO_FILL;
-  const d = Math.max(oh / (2 * vFit * _tanV), ow / (2 * SOLO_FILL * _tanH));
-  return { camPos: _bc.clone().addScaledVector(dir, d), target: _bc.clone() };
+  // 조각: 조준점을 중심보다 아래로 → 바닥 고정한 채 위로 키움. 그림: 중심 유지(불변)
+  const target = _bc.clone();
+  if (!isFrame) target.y = _box.min.y + oh * SOLO_SCULPT_VBIAS;
+  const fillV = isFrame ? SOLO_FILL * (CLEAR_H / H) : SOLO_FILL_SCULPT;
+  const fillH = isFrame ? SOLO_FILL : SOLO_FILL_SCULPT;
+  // 비대칭 조준 대응: target에서 위/아래 더 먼 쪽이 안 잘리게 d 산출 (그림은 oh/2로 동일)
+  const vHalf = Math.max(_box.max.y - target.y, target.y - _box.min.y);
+  const d = Math.max(vHalf / (fillV * _tanV), ow / (2 * fillH * _tanH));
+  return { camPos: target.clone().addScaledVector(dir, d), target };
 }
 
 // ─── 카메라 트랜지션(트윈) — 클릭으로만 발동 ───
@@ -770,6 +847,51 @@ function startTween(pos, quat, fov, offEnd, onDone) {
   tween = { t: 0, dur: 0.6, fov0: camera.fov, fov1: fov, off0, off1: offEnd, onDone };
   mode = 'transition';
 }
+// ─── 단독 감상 작품 해설 라벨 (미술관 캡션) ───
+const LOADED_AT = new Date();                     // 갤러리 로딩 시각 = 보상 획득일
+const _pad2 = n => String(n).padStart(2, '0');
+const LOADED_AT_STR = `${LOADED_AT.getFullYear()}-${_pad2(LOADED_AT.getMonth() + 1)}-`
+  + `${_pad2(LOADED_AT.getDate())} ${_pad2(LOADED_AT.getHours())}:${_pad2(LOADED_AT.getMinutes())}`;
+// 보상 사유(플레이스홀더): 평가 점수 상승 + 그 근거가 된 원시데이터 개선을 회화체로
+const REWARD_MSG = {
+  move:   '틈새 운동량이 늘어서 잘 움직이기가 4점 상승했어요.',
+  rest:   '깊은 수면 비율이 좋아져서 잘 쉬기가 4점 상승했어요.',
+  groom:  '피부 수분도가 좋아져서 잘 가꾸기가 4점 상승했어요.',
+  manage: '스트레스 회복 탄력성이 좋아져서 잘 다스리기가 4점 상승했어요.',
+};
+const _artLabelEl = document.getElementById('art-label');
+const _alTitleEl = _artLabelEl.querySelector('.al-title');
+const _alMetaEl = _artLabelEl.querySelector('.al-meta');
+const _cardsEl = document.getElementById('cards');
+const _alBox = new THREE.Box3();
+const _alAnchor = new THREE.Vector3();             // 작품+전시대 바닥 중앙(월드, focus 동안 고정)
+const _alNDC = new THREE.Vector3();
+let _alShown = false;
+function showArtLabel(data) {
+  const isFrame = data.zone !== 'move';
+  const name = isFrame ? (data.group.userData._art || '') : (data.group.userData._sculpt || '');
+  _alTitleEl.textContent = name || '(제목 미정)';
+  _alMetaEl.innerHTML = `획득일 ${LOADED_AT_STR}<br>${REWARD_MSG[data.zone] || ''}`;
+  // 작품 기준 위치: (작품+전시대) 바운딩박스 바닥 중앙 = 앵커 → 매 프레임 화면 투영
+  _alBox.setFromObject(data.group);
+  _alAnchor.set((_alBox.min.x + _alBox.max.x) / 2, _alBox.min.y, (_alBox.min.z + _alBox.max.z) / 2);
+  _artLabelEl.classList.add('show');
+  _alShown = true;
+  _cardsEl.style.display = 'none';                 // 단독감상: 점수카드 숨겨 캡션 영역 확보
+  updateArtLabelPos();
+}
+function hideArtLabel() {
+  _artLabelEl.classList.remove('show');
+  _alShown = false;
+  _cardsEl.style.display = '';
+}
+// (작품+전시대) 바닥선을 화면 투영 → 그 20px 아래에 라벨 (조각·그림 동일 규칙)
+function updateArtLabelPos() {
+  if (!_alShown) return;
+  _alNDC.copy(_alAnchor).project(camera);
+  const y = (0.5 - _alNDC.y * 0.5) * H;            // 바닥선의 화면 Y(px)
+  _artLabelEl.style.top = (y + 20) + 'px';
+}
 function focusOn(data) {
   focusGroup = data.group;
   soloAngle = 0;
@@ -783,11 +905,13 @@ function focusOn(data) {
   setSoloIsolation(true, focusGroup);          // 갤러리 숨기고 이 작품만
   // 그림: 위쪽 렌즈 시프트로 카드 위 영역 중앙에 / 조각: 시프트 없음(현행 유지)
   startTween(pose.camPos, quatLookingAt(pose.camPos, pose.target), SOLO_FOV,
-             isFrame ? SOLO_SHIFT_FRAME : 0,
+             isFrame ? SOLO_SHIFT_FRAME : SOLO_SHIFT_SCULPT,
              () => { mode = 'focus'; });
   applyFocusLighting({ zone: data.zone, camPos: pose.camPos, target: pose.target });
+  showArtLabel(data);
 }
 function returnToInit() {
+  hideArtLabel();
   // 복구는 트윈이 끝나 초기 시점에 도착한 뒤 — 복귀 도중 작품 뒷면/잔상 노출 방지.
   startTween(INIT.pos, INIT.quat, INIT.fov, VIEW_SHIFT_Y,
              () => {
@@ -1008,6 +1132,7 @@ function animate() {
   // BokehShader: factor = focus + viewZ, viewZ≈-거리(음수) → focus는 양수 월드거리
   bokeh.uniforms['focus'].value = dofFocusDistance();
   composer.render();
+  updateArtLabelPos();                              // 작품 바닥선 추종(트윈/회전 중에도)
 }
 animate();
 
