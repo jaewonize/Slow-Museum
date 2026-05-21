@@ -38,7 +38,7 @@ main {
   pointer-events: none;
 }
 #canvas-wrap {
-  width: 384px; height: 768px;
+  width: 360px; height: 780px;
   background: #ffffff;
   border-radius: 40px;
   overflow: hidden;
@@ -96,8 +96,8 @@ canvas:active { cursor:grabbing; }
 }
 
 #sliders {
-  width: 384px;
-  height: 768px;
+  width: 360px;
+  height: 780px;
   background: #ffffff;
   border-radius: 0 40px 40px 0;
   padding: 90px 28px 28px 56px;
@@ -204,7 +204,7 @@ canvas:active { cursor:grabbing; }
 <main>
 <div id="canvas-wrap">
   <div id="phone-title">Slow Museum</div>
-  <canvas id="gallery" width="384" height="768"></canvas>
+  <canvas id="gallery" width="360" height="780"></canvas>
   <div id="cards">
     <div class="card"><div class="name">잘 움직이기</div><div class="score" id="card-move">72</div></div>
     <div class="card"><div class="name">잘 쉬기</div><div class="score" id="card-rest">60</div></div>
@@ -263,7 +263,7 @@ canvas:active { cursor:grabbing; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/GammaCorrectionShader.js"></script>
 <script>
-const W = 384, H = 768;
+const W = 360, H = 780;
 const canvas = document.getElementById('gallery');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(W, H);
@@ -553,7 +553,10 @@ function updateZoneLighting() {
 
 // ─── 카메라 (갤러리 내부 시점) ───
 // 기본: 중앙(안쪽) 벽 정면 고정. 양옆 벽은 가장자리에 살짝만 걸쳐 보이도록 FOV/위치 조정.
-const camera = new THREE.PerspectiveCamera(66, W / H, 0.1, 100);
+// 캔버스 360×780 자연 aspect + FOV 보정: 옛 384×768(aspect 0.5·FOV 66°)의 *가로 시야* 보존.
+//   FOV_new = 2·atan(tan(33°)·(0.5)/(W/H)) ≈ 70.27° (세로 시야는 약 6.5% 더 넓어짐)
+const CAM_FOV = 2 * Math.atan(Math.tan(33 * Math.PI / 180) * (384 / 768) / (W / H)) * (180 / Math.PI);
+const camera = new THREE.PerspectiveCamera(CAM_FOV, W / H, 0.1, 100);
 camera.position.set(0, 1.5, 5.5);
 camera.rotation.order = 'YXZ';
 // 초기 pitch=0 (완전 수평) → 정면벽이 이미지 평면과 평행 → 수직선이 화면 세로선과 평행, 수직 투시 없음.
@@ -765,7 +768,7 @@ const SOLO_FILL = 0.6;                        // 그림: 가용 영역의 60%만
 const SOLO_FILL_SCULPT = 0.85;                // 조각: 단독감상 시 더 크게 채움(그림보다 크게)
 const SOLO_SCULPT_VBIAS = 0.42;               // 조각 조준 높이(0=바닥,1=머리). <0.5 → 아래 고정·위로 키움
 const _tanV = Math.tan(SOLO_FOV * Math.PI / 360);
-const _tanH = _tanV * (W / H);                // 포트레이트 → 수평 화각은 절반
+const _tanH = _tanV * (W / H);                // solo framing: 자연 aspect
 // 그림(액자)은 화면 센터가 아니라 하단 점수카드 위 영역 기준으로 정렬.
 const CARD_H = 268;                           // #cards 높이(CSS)와 동일
 const CLEAR_H = H - CARD_H;                   // 카드 위 가용 세로 영역(≈500)

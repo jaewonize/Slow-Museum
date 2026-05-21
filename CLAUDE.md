@@ -78,7 +78,7 @@ slow-museum/
 - 검증 팁: 프리뷰 스크린샷 툴이 간헐 불안정 → 단일 `preview_eval`로 씬그래프/수치 확인이 안정적.
 
 ### 베이스 셸 재사용 원칙 (slow_planet.html 기준 — 파일은 삭제됨, 레이아웃 원칙만 계승)
-- 좌측 폰 프레임(`#canvas-wrap` 384×768) · 제목(`#phone-title`) · 하단 점수카드(`#cards`)
+- 좌측 폰 프레임(`#canvas-wrap` 360×780) · 제목(`#phone-title`) · 하단 점수카드(`#cards`)
   · 우측 컨트롤 패널(`#sliders`: 슬라이더 4개 + 입력 버튼 + 트리거) — **레이아웃 그대로 유지**
 - 슬라이더 draft → `입력` 버튼 → `applyScores()` → `scores{}`/카드 반영 흐름 유지
 - **교체 대상**: 좌측 3D 영역만. `THREE.SphereGeometry` 지구 + 대기권 + 지구 텍스처
@@ -213,7 +213,7 @@ slow-museum/
 ### 완료
 - [x] index.html 골격 (slow_planet 셸 재사용, 좌측만 갤러리로 교체) + 파일명 index.html
 - [x] 갤러리 3D 실내 (바닥/천장/중앙·좌·우 벽), 카메라 수평 고정(수직선 평행)
-      + 렌즈 시프트(카드 위 정렬) + FOV 66 + 회전한계
+      + 렌즈 시프트(카드 위 정렬) + FOV(`CAM_FOV` 계산, 360×780에서 ≈70.3°로 옛 가로시야 보존) + 회전한계
 - [x] 입력: 1포인터 드래그 좌우회전(수직패닝 없음) · 휠/핀치 줌 · 클릭 ·
       빈곳/천장 클릭 복귀. 모드: `free`/`transition`/`focus`/`overview`
 - [x] 단독 감상(focus): 깨끗한 배경벽 격리 + 카드 위 정렬 + **카메라 궤도 턴테이블
@@ -261,7 +261,8 @@ slow-museum/
   월드단위. 앉은자세 등 전시대 걸침용. oy −1.0=전시대높이만큼 아래),
   `SCULPT_H`(균일 높이 기준), `PED_LAYOUT`(x,z,전시대높이,모델명). 조각별 스포트 = 로더 내
   `spot`(intensity 2.8, `spot.distance`=전시대 밑동까지). 접지그림자=`_contactShadowTex`.
-- **카메라/뷰**: `camera`(fov 66), `VIEW_SHIFT_Y`(렌즈시프트), `YAW_LIMIT`,
+- **카메라/뷰**: `camera`(fov=`CAM_FOV`, 옛 384×768·FOV66°의 가로시야를 현재 W/H에서 보존),
+  `VIEW_SHIFT_Y`(렌즈시프트), `YAW_LIMIT`,
   `applyCam`, 트윈 `startTween`/`focusOn`/`returnToInit`, 오버뷰 `OVERVIEW`/`enterOverview`.
 - **단독감상 프레이밍**(`computeSoloPose`): 그림=중심·`SOLO_FILL` 0.6(불변).
   조각=`SOLO_FILL_SCULPT` 0.85(더 크게)·`SOLO_SCULPT_VBIAS` 0.42(<0.5=바닥 고정·위로 키움)·
