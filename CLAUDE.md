@@ -252,6 +252,10 @@ slow-museum/
 - **벽↔존 매핑**: rest=왼쪽/풍경, groom=가운데/초상, manage=오른쪽/추상, move=중앙홀/조각.
   각 `zones.{key}.items[0..3]`이 프레임(생성 z순). 프레임=`makeFrame` 그룹
   (`userData.art`=그림 plane, `userData.frame`=테두리 box).
+- **벽별 균일 간격**(`layoutWallUniform`): 4프레임 로드 완료 시 자동 호출.
+  첫·마지막 프레임 센터(p0·p3) 유지 → 전체 폭 보존, 가운데 둘(p1·p2)을
+  모서리 간격 G가 균일하도록 재배치. 벽마다 G 독립 계산. 프레임 외곽폭은
+  `userData._outerW` (W+0.16, fitFrameBy*에서 설정).
 - **벽 작품 배치/크기**: `GROOM_ART`(배열·순서), `GROOM_AREA`(면적) ·
   `MANAGE_ART_H`/`MANAGE_NOTICE_H`(세로길이) + `[['HK1.jpg',1],['HK2.jpg',2]]` ·
   `LANDSCAPE_AREA` + `[['cypresses',0],...]`. 사이즈 함수: `fitFrameByArea` / `fitFrameByHeight`.
@@ -351,7 +355,7 @@ slow-museum/
   (검증유지: brancusi T1, milo T3, nike·thinker·thrower T4)
 
 ### 진행 상황
-- [x] T1  - [x] T2 (사용자 승인 완료)  - [~] T3 (씬 구성됨·검토중)  - [ ] T4  - [ ] T5
+- [x] T1  - [x] T2  - [x] T3  - [x] T4 (사용자 승인 완료)  - [~] T5 (씬 구성됨·검토중)
   - 코드: 그림/조각 로더 턴 구동화(`TURN`·`EXHIBIT`·`SCULPT_SEQ`·`PED_ASSIGN`),
     MANAGE_AREA=2.0, #2=고정 thrower(`PED_FIXED`), `PED_DEFAULT_H`=0.45
   - **T1 확정값**: 조각 보정 balloon_dog `{scale:.81,ry:55°,ox:0.2,WX1.8,WZ1.4}` ·
@@ -381,3 +385,25 @@ slow-museum/
     milkmaid: 수동 크롭 L14·R30·T10·B34(원본 863×1000).
     little_house: 수동 크롭 R30·B30(원본 512×507).
   - **T3 검토 대기**: 조각 scale/높이/ry/ox/bright + 그림 mat·크기 피드백 → 기록 후 반영
+  - **T4 조각↔슬롯**: #1=nike(검증유지) · **#2=thrower(고정 기준작)** · #3=song · #4=thinker(검증유지) ·
+    **#5=tulip**(SCULPT_SEQ에서 thrower↔tulip 교환 → 빈 슬롯이 T4→T5로 이동).
+    nike·thinker는 검증값 그대로(scale.9·ry0 / scale.88·ry π/6·bright.9·ox0).
+    song `{}`·전시대 h0.3(최저, nike와 동일). tulip `{scale:0.8, ox:0.2}`·기본 전시대 h0.45.
+    그림: pearl_earing·picasso **검증유지**(원본 직접), 나머지 10개 `.work.jpg` 생성(원본 보존,
+    일부 mat 크롭. roadtoyork.png→jpg 등 최적화).
+    primavesi: 아트포스터(GUSTAV KLIMT 텍스트·키라인)→원화만 크롭(1260×1596) 후
+    깨끗한 흰 mat(짧은변 9%≈113px) 재합성. 원본 보존(1400×2000).
+    paul_klee_1: 풀-블리드 원화에 흰 mat(짧은변 9%≈83px) 패딩만 추가(원본 922×1280→1088×1446).
+    mondrian_1: 아트포스터(PIET MONDRIAN 텍스트)→원화만 사방 검출 크롭(901×1356), mat 미추가. 원본 1143×1600 보존.
+  - **T4 검토 대기**: song·primavesi·mona_lisa 등 신규 조정 + 그림 mat·크기 피드백 → 반영
+  - **T5 조각↔슬롯**: #1=thrower(검증) · **#2=carol_gold(고정 기준작)** · #3=zeus · #4=warrior · #5=walker
+    (PED_FIXED가 thrower→carol_gold로 변경된 상태라 T5에서 thrower가 #1 회전으로 등장.
+    T5 수동배치: walker↔zeus 교환).
+    walker `{scale:0.88}`·전시대 h0.6 · zeus `{scale:0.72}`·전시대 h0.6 · warrior 신규(기본). 그림: water_lilies **검증유지**(원본 직접·area2.3),
+    나머지 11개 `.work.jpg` 생성(원본 보존. rothko_1.png 2.9MB→152KB, tango 1.7MB→520KB 등 최적화).
+    rothko_1: 사진 배경 제거→원화 크롭(1349×1418, 하단 +10px 더 트림)+흰mat 121px 재합성.
+    원본 .png 1352×1454 보존. **height-fit 1.9 적용**(`MANAGE_HEIGHT_KEEP`에 추가) → mat 포함해도
+    원화 자체 면적이 다른 작품과 유사하게 큼(HK1/HK2 사이즈).
+    rothko_2: 풀-블리드 원화에 흰mat 68px(짧은변 9%) 패딩, **height-fit 1.9 적용**(rothko_1과 동일 방식).
+    원본 770×759 보존, work 906×895.
+  - **T5 검토 대기**: walker·warrior·zeus 신규 조정 + 그림 mat·크기 피드백 → 반영

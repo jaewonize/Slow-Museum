@@ -412,7 +412,7 @@ Object.values(zones).forEach(z => scene.add(z.group));
 // 위치=`PED_POS`(고정), 전시대 높이/폭=모델별(`SCULPT_PED_H/WX/WZ`, 페어링 불변식),
 // 턴별 배정=`PED_ASSIGN`(#2는 `PED_FIXED` thrower 고정).
 // ─── 전시 5턴(알파벳순 4개씩). 전시대 #2(앞열-중)는 항상 비움. CLAUDE.md "전시 최적화 5턴 작업" ───
-const TURN = 3;                                   // 현재 전시 턴 (1..5) — 그림/조각 공통
+const TURN = 5;                                   // 현재 전시 턴 (1..5) — 그림/조각 공통
 const SCULPT_H = 1.7;                             // 조각 목표 높이(월드) — 균일 정규화
 // 모델별 보정: scale=균일높이 대비 배율, ry=Y회전, ox=X오프셋, oy=Y오프셋(−=아래),
 //   oz=Z오프셋(+=앞/관람자 쪽, 월드단위), bright=자기발광
@@ -431,6 +431,10 @@ const SCULPT_ADJ = {
   ionia:       { scale: 0.855, ry: 0 },                           // 0.9×0.95 (T3)
   mauryan:     { scale: 1.1,   ry: 0 },                           // 1.1배 (T3)
   listening:   { scale: 1,     ry: 0, oy: -0.79, oz: 0.4 },       // 앉은 자세: 아래 −0.79·앞 +0.4(전시대 걸침)
+  tulip:       { scale: 0.8,   ry: 0, ox: 0.2 },                  // 0.8배·우로 0.2 (T4 차용)
+  song:        { scale: 1.1,   ry: 0, oz: 0.2 },                  // 1.1배·앞 +0.2 (T4)
+  walker:      { scale: 0.88,  ry: 0 },                           // 1.1×0.8 (T5, 전시대 h0.6)
+  zeus:        { scale: 0.72,  ry: 0, ox: -0.02 },                // 0.9×0.8·좌 0.02 (T5, 전시대 h0.6)
 };
 // 모델별 전시대 높이(검증값). 미지정 신규 = PED_DEFAULT_H → 검토 후 여기에 확정 누적
 const SCULPT_PED_H = { milo: 0.3, thrower: 0.3, nike: 0.3, thinker: 0.6, brancusi: 1.0,
@@ -440,7 +444,10 @@ const SCULPT_PED_H = { milo: 0.3, thrower: 0.3, nike: 0.3, thinker: 0.6, brancus
   colossus: 0.3,      // 전시대(0.3) 위에
   ionia: 0,           // 전시대 없이 바닥 직접(접지 그림자만)
   mauryan: 0,         // 전시대 없이 바닥 직접(접지 그림자만)
-  listening: 1.0 };   // bust 전시대와 동일(h1.0)
+  listening: 1.0,     // bust 전시대와 동일(h1.0)
+  song: 0.15,         // 낮은 전시대(0.15)
+  walker: 0.6,        // 중간 전시대(h0.6, thinker와 동일)
+  zeus: 0.6 };        // 중간 전시대(h0.6, thinker와 동일)
 const PED_DEFAULT_H = 0.45;
 // 모델별 전시대 가로(X) 폭 배율 (기본 1, 조각 무왜곡). 해당 모델에만 적용·턴 넘어가도 유지
 const SCULPT_PED_WX = { balloon_dog: 1.8, henry_moor: 1.15 };  // 룰대로 슬롯센터 기준 대칭 확장
@@ -449,12 +456,12 @@ const SCULPT_PED_WZ = { balloon_dog: 1.4 };
 const SCULPT_SEQ = [
   'abstract','ballerina','balloon_dog','brancusi', 'bust','henry_moor','colossus','carol_gold', // T2 수동배치: #1bust·#3henry_moor·#4colossus·#5carol_gold
 
-  'mauryan','listening','ionia','milo', 'nike','song','thinker','thrower', // T3 수동배치: #1mauryan·#3listening·#4ionia·#5milo
-  'tulip','walker','warrior','zeus' ];
+  'mauryan','listening','ionia','milo', 'nike','song','thinker','tulip', // T3 수동배치 / T4: thrower↔tulip 교환
+  'thrower','zeus','warrior','walker' ];  // T5 수동배치: walker↔zeus 교환 (#1thrower·#3zeus·#4warrior·#5walker)
 const PED_POS = [ [-2.0,-1.8], [0.0,-1.8], [2.0,-1.8], [-1.2,-5.5], [1.2,-5.5] ]; // #1..#5
 const PED_SLOTS = [0, 2, 3, 4];                   // 회전 슬롯 #1·#3·#4·#5 (index 0,2,3,4)
 // #2(index 1, 앞열 중앙) = 전 턴 고정 기준작. 회전 시퀀스에선 제외(중복 방지)
-const PED_FIXED = { 1: 'thrower' };
+const PED_FIXED = { 1: 'carol_gold' };
 const _fixedNames = Object.values(PED_FIXED);
 const _turnSculpts = SCULPT_SEQ.slice((TURN - 1) * 4, TURN * 4)
   .filter(n => !_fixedNames.includes(n));
@@ -607,6 +614,7 @@ function fitFrameByArea(f, tex, aspect, area) {
   art.geometry.dispose(); art.geometry = new THREE.PlaneGeometry(W, H);
   art.material.map = tex; art.material.color.set(0xffffff); art.material.needsUpdate = true;
   box.geometry.dispose(); box.geometry = new THREE.BoxGeometry(W + 0.16, H + 0.16, 0.07);
+  f.userData._outerW = W + 0.16;                  // 균일 간격 레이아웃용
 }
 function fitFrameByHeight(f, tex, aspect, frameH) {
   const H = frameH, W = frameH * aspect;
@@ -614,6 +622,23 @@ function fitFrameByHeight(f, tex, aspect, frameH) {
   art.geometry.dispose(); art.geometry = new THREE.PlaneGeometry(W, H);
   art.material.map = tex; art.material.color.set(0xffffff); art.material.needsUpdate = true;
   box.geometry.dispose(); box.geometry = new THREE.BoxGeometry(W + 0.16, H + 0.16, 0.07);
+  f.userData._outerW = W + 0.16;                  // 균일 간격 레이아웃용
+}
+// 벽별 균일 간격: 첫·마지막 프레임 센터(p0·p3) 유지 → 전체 폭 보존,
+// 가운데 둘(p1·p2)을 모서리간 균일 간격 G로 재배치 (G = (innerSpace - w1 - w2)/3).
+const _zoneAxis = { groom: 'x', manage: 'z', rest: 'z' };
+const _loaded = { groom: 0, manage: 0, rest: 0 };
+function layoutWallUniform(zk) {
+  const ax = _zoneAxis[zk]; const items = zones[zk].items;
+  if (items.length < 4) return;
+  const w = items.map(it => it.userData._outerW || 0);
+  if (w.some(x => x <= 0)) return;
+  const p0 = items[0].position[ax], p3 = items[3].position[ax];
+  const dir = Math.sign(p3 - p0) || 1;
+  const D = Math.abs(p3 - p0);
+  const G = (D - w[0] / 2 - w[3] / 2 - w[1] - w[2]) / 3;   // 내부 모서리간 균일 간격
+  items[1].position[ax] = p0 + dir * (w[0] / 2 + G + w[1] / 2);
+  items[2].position[ax] = items[1].position[ax] + dir * (w[1] / 2 + G + w[2] / 2);
 }
 const EXHIBIT = {
   groom:  { dir: 'portrait',  area: GROOM_AREA, seq: [
@@ -629,7 +654,7 @@ const EXHIBIT = {
     'inwang!','lady_on_a_beach','le_reve','little_house', 'roadtoyork','rouen_athedral','schloss_kammer','suburb',
     'summer','tollgate','view_of_venice','water_lilies!' ] },
 };
-const MANAGE_HEIGHT_KEEP = { HK1: 1, HK2: 1 };    // 추상 검증유지 → height-fit 1.9
+const MANAGE_HEIGHT_KEEP = { HK1: 1, HK2: 1, rothko_1: 1, rothko_2: 1 };  // height-fit 1.9 (mat 포함시 원화면적 유지)
 Object.keys(EXHIBIT).forEach(zk => {
   const z = EXHIBIT[zk];
   z.seq.slice((TURN - 1) * 4, TURN * 4).forEach((entry, i) => {
@@ -646,6 +671,7 @@ Object.keys(EXHIBIT).forEach(zk => {
       const aspect = iw / ih;
       if (zk === 'manage' && MANAGE_HEIGHT_KEEP[name]) fitFrameByHeight(f, tex, aspect, MANAGE_ART_H);
       else fitFrameByArea(f, tex, aspect, z.area);
+      if (++_loaded[zk] === 4) layoutWallUniform(zk);    // 벽 4개 다 로드되면 균일 간격 재배치
     }, undefined, err => console.error(zk + ' load failed:', name, err));
   });
 });
